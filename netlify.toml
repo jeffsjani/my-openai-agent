@@ -5,3 +5,6 @@
 [build]
   command = "npm install"
   publish = "."
+
+[functions."agent"]
+  timeout = 900
