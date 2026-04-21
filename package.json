@@ -1,7 +1,6 @@
 {
-  "name": "my-openai-agent",
+  "name": "chapter-worker",
   "version": "1.0.0",
-  "type": "module",
   "dependencies": {
     "@openai/agents": "latest",
     "zod": "^4.0.0"
