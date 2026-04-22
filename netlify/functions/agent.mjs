@@ -3324,7 +3324,9 @@ async function runNode(agent, runner, conversationHistory) {
   );
 
   if (!resultTemp.finalOutput) {
-    throw new Error(`Agent result is undefined for ${agent?.name ?? "unknown agent"}`);
+    throw new Error(
+      `Agent result is undefined for ${agent?.name ?? "unknown agent"}`
+    );
   }
 
   return {
@@ -3335,10 +3337,14 @@ async function runNode(agent, runner, conversationHistory) {
 
 export async function runWorkflow(workflow) {
   return await withTrace("CHAPTER WORKER v2", async () => {
+    console.log("runWorkflow entered");
+
     const rawInput =
       typeof workflow?.input_as_text === "string"
         ? workflow.input_as_text
         : JSON.stringify(workflow ?? {});
+
+    console.log("rawInput length", rawInput.length);
 
     let parsedInput = {};
     try {
@@ -3357,6 +3363,9 @@ export async function runWorkflow(workflow) {
       1
     );
 
+    console.log("configuredRewriteCycles", configuredRewriteCycles);
+    console.log("configuredPolishCycles", configuredPolishCycles);
+
     const state = {
       rewrite_cycle_completed: 0,
       max_enhancement_cycles: configuredRewriteCycles,
@@ -3366,6 +3375,32 @@ export async function runWorkflow(workflow) {
       remaining_polish_cycles: configuredPolishCycles,
       last_node5_status: null,
     };
+
+    const conversationHistory = [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: rawInput }],
+      },
+    ];
+
+    const runner = new Runner({
+      traceMetadata: {
+        __trace_source__: "agent-builder",
+        workflow_id: "wf_69e19ca44b48819095fdcc1546128f870c10ef5883d49c83",
+      },
+    });
+
+    if (parsedInput?.debug_return_before_openai === true) {
+      console.log("debug_return_before_openai hit");
+      return {
+        output_text: JSON.stringify({ ok: true, stage: "before_openai" }),
+        output_parsed: { ok: true, stage: "before_openai" },
+      };
+    }
+
+    // continue with Node 1, Node 2, etc...
+  });
+}
 
     const conversationHistory = [
       {
