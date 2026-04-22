@@ -4180,7 +4180,6 @@ export async function runWorkflow(workflow) {
       };
     }
 
-    // NODE 1
 
     if (parsedInput?.debug_mock_node3 === true) {
       return {
@@ -4478,8 +4477,7 @@ export async function runWorkflow(workflow) {
           drafted_units: [
             {
               unit_label: "Chapter 1 - Beirut Bar",
-              chapter_heading: "Chapter 1
-Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
               drafted_text: "Mock drafted text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for fracture. Elise selects him with impossible precision. Their conversation becomes mutual recognition under hidden pressure, oxygen threaded through surveillance instincts and withheld affiliations. A dry humor beat opens the possibility of pleasure. Before the moment can become real, twin operational summons break the spell and pull them apart.",
               ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
               carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
@@ -4799,8 +4797,7 @@ Beirut Bar",
           drafted_units: [
             {
               unit_label: "Chapter 1 - Beirut Bar",
-              chapter_heading: "Chapter 1
-Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
               drafted_text: "Mock drafted text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for fracture. Elise selects him with impossible precision. Their conversation becomes mutual recognition under hidden pressure, oxygen threaded through surveillance instincts and withheld affiliations. A dry humor beat opens the possibility of pleasure. Before the moment can become real, twin operational summons break the spell and pull them apart.",
               ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
               carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
@@ -4829,6 +4826,7 @@ Beirut Bar",
       };
     }
 
+    // NODE 1
     // NODE 1
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
