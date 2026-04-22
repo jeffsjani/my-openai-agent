@@ -3580,22 +3580,36 @@ export default async (req, context) => {
     }
 
     let body;
-    try {
-      body = await req.json();
-    } catch {
-      return json(
-        {
-          ok: false,
-          error: "Invalid JSON body",
-        },
-        400
-      );
-    }
+try {
+  body = await req.json();
+} catch {
+  return json(
+    {
+      ok: false,
+      error: "Invalid JSON body",
+    },
+    400
+  );
+}
 
-    const inputPayload =
-      typeof body?.input_as_text === "string"
-        ? body.input_as_text
-        : JSON.stringify(body);
+if (body?.ping === "test") {
+  return json({
+    ok: true,
+    message: "agent endpoint reachable",
+  });
+}
+
+if (body?.input_as_text === "{\"ping\":\"test\"}") {
+  return json({
+    ok: true,
+    message: "agent endpoint reachable",
+  });
+}
+
+const inputPayload =
+  typeof body?.input_as_text === "string"
+    ? body.input_as_text
+    : JSON.stringify(body);
 
     if (!inputPayload || !inputPayload.trim()) {
       return json(
