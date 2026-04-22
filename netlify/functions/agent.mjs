@@ -3354,21 +3354,55 @@ export async function runWorkflow(workflow) {
     const workflowStartedAt = Date.now();
     console.log("[workflow] runWorkflow entered");
 
-    const rawInput =
+    let initialInput =
       typeof workflow?.input_as_text === "string"
         ? workflow.input_as_text
         : JSON.stringify(workflow ?? {});
 
-    console.log("[workflow] rawInput length", rawInput.length);
+    console.log("[workflow] initialInput length", initialInput.length);
 
     let parsedInput = {};
     try {
-      parsedInput = JSON.parse(rawInput);
+      parsedInput = JSON.parse(initialInput);
       console.log("[workflow] parsedInput JSON parse success");
     } catch {
       parsedInput = {};
       console.log("[workflow] parsedInput JSON parse failed, using {}");
     }
+
+    // TEMP DEBUG SUPPORT:
+    // If master_story_bible_text is supplied, promote it into an explicit canon-bearing payload
+    // so Node 1 can see that the Master Story Bible is actually present in source input.
+    if (
+      typeof parsedInput?.master_story_bible_text === "string" &&
+      parsedInput.master_story_bible_text.trim().length > 0
+    ) {
+      parsedInput.master_story_bible_present = true;
+      parsedInput.master_story_bible_debug_source = {
+        name: "Black_Channel_Enhanced_Master_Story_Bible_V3.pdf",
+        kind: "inline_debug_text",
+        text: parsedInput.master_story_bible_text
+      };
+
+      parsedInput.attached_documents = Array.isArray(parsedInput.attached_documents)
+        ? parsedInput.attached_documents
+        : [];
+
+      if (
+        !parsedInput.attached_documents.includes(
+          "Black_Channel_Enhanced_Master_Story_Bible_V3.pdf"
+        )
+      ) {
+        parsedInput.attached_documents.push(
+          "Black_Channel_Enhanced_Master_Story_Bible_V3.pdf"
+        );
+      }
+
+      console.log("[workflow] master_story_bible_text detected and promoted");
+    }
+
+    const rawInput = JSON.stringify(parsedInput);
+    console.log("[workflow] effective rawInput length", rawInput.length);
 
     const configuredRewriteCycles = safeCycleCount(
       parsedInput?.run_config?.rewrite_cycles,
@@ -3420,6 +3454,10 @@ export async function runWorkflow(workflow) {
     });
 
     console.log("[workflow] Runner initialized");
+    console.log(
+      "[workflow] master_story_bible_present",
+      parsedInput?.master_story_bible_present ?? false
+    );
 
     // NODE 1
     const node1Result = await runNode(
@@ -3695,6 +3733,13 @@ export default async (req, context) => {
         ok: true,
         message: "agent endpoint reachable",
       });
+    }
+
+    if (
+      typeof body?.master_story_bible_text === "string" &&
+      body.master_story_bible_text.trim().length > 0
+    ) {
+      console.log("[handler] master_story_bible_text received");
     }
 
     if (body?.debug_return_before_openai === true) {
