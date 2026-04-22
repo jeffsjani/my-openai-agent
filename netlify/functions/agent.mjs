@@ -3459,6 +3459,13 @@ export async function runWorkflow(workflow) {
       parsedInput?.master_story_bible_present ?? false
     );
 
+    if (parsedInput?.debug_return_before_node1 === true) {
+      return {
+        output_text: JSON.stringify({ ok: true, stage: "before_node1" }),
+        output_parsed: { ok: true, stage: "before_node1" },
+      };
+    }
+
     // NODE 1
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
