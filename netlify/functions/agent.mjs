@@ -4826,6 +4826,238 @@ export async function runWorkflow(workflow) {
       };
     }
 
+
+    if (parsedInput?.debug_mock_node4a === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          upstream_draft_status: "present",
+          upstream_source_node: "N3_Chapter_Drafter",
+          matching_node2_status: "present",
+          blocked_reasons: [],
+          next_node: "N4B_Enhancement_Evaluator"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          upstream_draft_status: "present",
+          upstream_source_node: "N3_Chapter_Drafter",
+          matching_node2_status: "present",
+          blocked_reasons: [],
+          next_node: "N4B_Enhancement_Evaluator"
+        }
+      };
+    }
+
+    if (parsedInput?.debug_mock_node4b === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          upstream_source_node: "N3_Chapter_Drafter",
+          matching_node2_status: "present",
+          enhancement_cycle_number: 1,
+          max_enhancement_cycles: 4,
+          cycles_remaining_after_rewrite: 3,
+          per_unit_enhancement_packets: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              contract_fidelity_score: 92,
+              drafting_rules_compliance_score: 90,
+              chapter_drive_score: 91,
+              kindle_readability_score: 90,
+              suspense_emotional_voltage_score: 93,
+              preserve: [
+                "Immediate equal-recognition dynamic between Callan and Elise.",
+                "Mirrored amber Beirut atmosphere."
+              ],
+              clarify: [
+                "Operational undertow beneath the flirtation."
+              ],
+              cut_or_reduce: [
+                "Any line that sounds too polished or pseudo-profound."
+              ],
+              strengthen: [
+                "Denied romantic payoff at the end of the chapter."
+              ],
+              add_or_sharpen: [
+                "Trackable exit-line and room-pressure cues."
+              ],
+              dialogue_upgrades: [
+                "Keep Callan calm and plain; keep Elise deliberate and costly."
+              ],
+              pov_emotional_access_upgrades: [
+                "Sharpen Callan's reading of the room and Elise."
+              ],
+              suspense_thriller_pressure_upgrades: [
+                "Make the twin summons arrive with cleaner interruption force."
+              ],
+              pacing_bingeability_upgrades: [
+                "Tighten middle beats so the chapter lands on a stronger break."
+              ],
+              paragraphing_kindle_readability_upgrades: [
+                "Prefer clean paragraph breaks around conversational turns."
+              ],
+              ending_forward_pressure_upgrades: [
+                "Make the final separation feel immediate and costly."
+              ],
+              ready_to_paste_rewrite_brief: "Preserve the seductive equal-recognition engine, sharpen the operational undertow, keep dialogue pressure-true, and land the denied payoff with stronger forward pull into Beirut Mission."
+            }
+          ],
+          cross_chapter_sequence_instructions: "Preserve Beirut as romantic ignition under hidden urgency and ensure the ending primes Chapter 2 as surprise, longing, and immediate danger.",
+          rewrite_brief: "Rewrite pass 1: sharpen room pressure, preserve chemistry, reduce over-polish, and strengthen the denied romantic payoff.",
+          blocked_reasons: [],
+          next_node: "N5_Chapter_Rewriter"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          upstream_source_node: "N3_Chapter_Drafter",
+          matching_node2_status: "present",
+          enhancement_cycle_number: 1,
+          max_enhancement_cycles: 4,
+          cycles_remaining_after_rewrite: 3,
+          per_unit_enhancement_packets: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              contract_fidelity_score: 92,
+              drafting_rules_compliance_score: 90,
+              chapter_drive_score: 91,
+              kindle_readability_score: 90,
+              suspense_emotional_voltage_score: 93,
+              preserve: [
+                "Immediate equal-recognition dynamic between Callan and Elise.",
+                "Mirrored amber Beirut atmosphere."
+              ],
+              clarify: [
+                "Operational undertow beneath the flirtation."
+              ],
+              cut_or_reduce: [
+                "Any line that sounds too polished or pseudo-profound."
+              ],
+              strengthen: [
+                "Denied romantic payoff at the end of the chapter."
+              ],
+              add_or_sharpen: [
+                "Trackable exit-line and room-pressure cues."
+              ],
+              dialogue_upgrades: [
+                "Keep Callan calm and plain; keep Elise deliberate and costly."
+              ],
+              pov_emotional_access_upgrades: [
+                "Sharpen Callan's reading of the room and Elise."
+              ],
+              suspense_thriller_pressure_upgrades: [
+                "Make the twin summons arrive with cleaner interruption force."
+              ],
+              pacing_bingeability_upgrades: [
+                "Tighten middle beats so the chapter lands on a stronger break."
+              ],
+              paragraphing_kindle_readability_upgrades: [
+                "Prefer clean paragraph breaks around conversational turns."
+              ],
+              ending_forward_pressure_upgrades: [
+                "Make the final separation feel immediate and costly."
+              ],
+              ready_to_paste_rewrite_brief: "Preserve the seductive equal-recognition engine, sharpen the operational undertow, keep dialogue pressure-true, and land the denied payoff with stronger forward pull into Beirut Mission."
+            }
+          ],
+          cross_chapter_sequence_instructions: "Preserve Beirut as romantic ignition under hidden urgency and ensure the ending primes Chapter 2 as surprise, longing, and immediate danger.",
+          rewrite_brief: "Rewrite pass 1: sharpen room pressure, preserve chemistry, reduce over-polish, and strengthen the denied romantic payoff.",
+          blocked_reasons: [],
+          next_node: "N5_Chapter_Rewriter"
+        }
+      };
+    }
+
+    if (parsedInput?.debug_mock_node5 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "rewrite",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          rewrite_cycle_completed: 1,
+          max_enhancement_cycles: 4,
+          remaining_rewrite_cycles: 0,
+          upstream_source_node: "N3_Chapter_Drafter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Rewritten mock text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for the moment polite order turns false. Elise selects him with unnerving precision, and the talk between them becomes equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opens a livable pocket between them. Before the moment can become real, twin operational summons cut across the room and force them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          rewrite_applied_summary: "Rewrite pass 1 sharpened room pressure, reduced over-polished phrasing, clarified the operational undertow, and strengthened the ending break into Beirut Mission.",
+          blocked_reasons: [],
+          next_node: "N6_Polish_Pass_1"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "rewrite",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          rewrite_cycle_completed: 1,
+          max_enhancement_cycles: 4,
+          remaining_rewrite_cycles: 0,
+          upstream_source_node: "N3_Chapter_Drafter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Rewritten mock text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for the moment polite order turns false. Elise selects him with unnerving precision, and the talk between them becomes equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opens a livable pocket between them. Before the moment can become real, twin operational summons cut across the room and force them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          rewrite_applied_summary: "Rewrite pass 1 sharpened room pressure, reduced over-polished phrasing, clarified the operational undertow, and strengthened the ending break into Beirut Mission.",
+          blocked_reasons: [],
+          next_node: "N6_Polish_Pass_1"
+        }
+      };
+    }
+
     // NODE 1
     // NODE 1
     const node1Result = await runNode(
