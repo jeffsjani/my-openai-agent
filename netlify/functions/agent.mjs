@@ -5058,6 +5058,242 @@ export async function runWorkflow(workflow) {
       };
     }
 
+
+    if (parsedInput?.debug_mock_node6 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          upstream_polish_status: "present",
+          upstream_source_node: "N5_Chapter_Rewriter",
+          structural_lock_status: "locked",
+          blocked_reasons: [],
+          next_node: "N7_Polish_Evaluator"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          upstream_polish_status: "present",
+          upstream_source_node: "N5_Chapter_Rewriter",
+          structural_lock_status: "locked",
+          blocked_reasons: [],
+          next_node: "N7_Polish_Evaluator"
+        }
+      };
+    }
+
+    if (parsedInput?.debug_mock_node7 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          upstream_source_node: "N5_Chapter_Rewriter",
+          polish_cycle_number: 1,
+          max_polish_cycles: 1,
+          cycles_remaining_after_polish: 0,
+          per_unit_polish_packets: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              polish_readiness_score: 94,
+              dialogue_naturalism_score: 93,
+              kindle_readability_score: 95,
+              paragraph_density_score: 92,
+              voice_preservation_score: 94,
+              preserve: [
+                "Immediate equal-recognition chemistry.",
+                "Mirrored amber atmosphere."
+              ],
+              tighten: [
+                "A few phrases can be compressed for cleaner momentum."
+              ],
+              smooth_or_rephrase: [
+                "Keep dialogue pressure-true, not over-finished."
+              ],
+              punctuation_cleanup: [
+                "Standardize punctuation rhythm and dialogue mechanics."
+              ],
+              dialogue_self_check_repairs: [
+                "Remove any line that sounds too polished for the moment."
+              ],
+              character_voice_preservation: [
+                "Keep Callan calm and plain; keep Elise deliberate and costly."
+              ],
+              paragraph_density_cleanup: [
+                "Slightly rebalance paragraph lengths for Kindle flow."
+              ],
+              line_break_cleanup: [
+                "Break at action or emotional turn points."
+              ],
+              formatting_cleanup: [
+                "Preserve clean heading and paragraph consistency."
+              ],
+              continuity_microfixes: [
+                "Make the twin summons interruption feel immediate and clean."
+              ],
+              final_surface_cleanup: [
+                "Light polish only; do not reopen structure."
+              ],
+              ready_to_paste_polish_brief: "Apply light final-surface cleanup, preserve voice distinction, keep the chemistry alive, and let the denied payoff land cleanly without over-polish."
+            }
+          ],
+          cross_chapter_polish_instructions: "Preserve the denied romantic payoff and ensure the final beat hands cleanly into Beirut Mission without reopening structure.",
+          polish_brief: "Polish pass 1: preserve voice, improve readability, keep the ending ache intact, and avoid pseudo-profound dialogue.",
+          blocked_reasons: [],
+          next_node: "N8_Polish_Rewriter"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          upstream_source_node: "N5_Chapter_Rewriter",
+          polish_cycle_number: 1,
+          max_polish_cycles: 1,
+          cycles_remaining_after_polish: 0,
+          per_unit_polish_packets: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              polish_readiness_score: 94,
+              dialogue_naturalism_score: 93,
+              kindle_readability_score: 95,
+              paragraph_density_score: 92,
+              voice_preservation_score: 94,
+              preserve: [
+                "Immediate equal-recognition chemistry.",
+                "Mirrored amber atmosphere."
+              ],
+              tighten: [
+                "A few phrases can be compressed for cleaner momentum."
+              ],
+              smooth_or_rephrase: [
+                "Keep dialogue pressure-true, not over-finished."
+              ],
+              punctuation_cleanup: [
+                "Standardize punctuation rhythm and dialogue mechanics."
+              ],
+              dialogue_self_check_repairs: [
+                "Remove any line that sounds too polished for the moment."
+              ],
+              character_voice_preservation: [
+                "Keep Callan calm and plain; keep Elise deliberate and costly."
+              ],
+              paragraph_density_cleanup: [
+                "Slightly rebalance paragraph lengths for Kindle flow."
+              ],
+              line_break_cleanup: [
+                "Break at action or emotional turn points."
+              ],
+              formatting_cleanup: [
+                "Preserve clean heading and paragraph consistency."
+              ],
+              continuity_microfixes: [
+                "Make the twin summons interruption feel immediate and clean."
+              ],
+              final_surface_cleanup: [
+                "Light polish only; do not reopen structure."
+              ],
+              ready_to_paste_polish_brief: "Apply light final-surface cleanup, preserve voice distinction, keep the chemistry alive, and let the denied payoff land cleanly without over-polish."
+            }
+          ],
+          cross_chapter_polish_instructions: "Preserve the denied romantic payoff and ensure the final beat hands cleanly into Beirut Mission without reopening structure.",
+          polish_brief: "Polish pass 1: preserve voice, improve readability, keep the ending ache intact, and avoid pseudo-profound dialogue.",
+          blocked_reasons: [],
+          next_node: "N8_Polish_Rewriter"
+        }
+      };
+    }
+
+    if (parsedInput?.debug_mock_node8 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          polish_cycle_completed: 1,
+          max_polish_cycles: 1,
+          remaining_polish_cycles: 0,
+          upstream_source_node: "N5_Chapter_Rewriter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          polish_applied_summary: "Polish pass 1 tightened phrasing, preserved voice distinction, improved readability, and kept the denied payoff intact.",
+          blocked_reasons: [],
+          next_node: "N9_Final_Chapter_Output"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "polish",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          polish_cycle_completed: 1,
+          max_polish_cycles: 1,
+          remaining_polish_cycles: 0,
+          upstream_source_node: "N5_Chapter_Rewriter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          polish_applied_summary: "Polish pass 1 tightened phrasing, preserved voice distinction, improved readability, and kept the denied payoff intact.",
+          blocked_reasons: [],
+          next_node: "N9_Final_Chapter_Output"
+        }
+      };
+    }
+
     // NODE 1
     // NODE 1
     const node1Result = await runNode(
