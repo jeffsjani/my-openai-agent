@@ -3294,6 +3294,7 @@ Every key must have a value.`,
   }
 });
 
+
 function toInt(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -3316,7 +3317,9 @@ function json(data, status = 200) {
   });
 }
 
-async function runNode(agent, runner, conversationHistory) {
+async function runNode(agent, runner, conversationHistory, label) {
+  if (label) console.log(`START ${label}`);
+
   const resultTemp = await runner.run(agent, [...conversationHistory]);
 
   conversationHistory.push(
@@ -3328,6 +3331,8 @@ async function runNode(agent, runner, conversationHistory) {
       `Agent result is undefined for ${agent?.name ?? "unknown agent"}`
     );
   }
+
+  if (label) console.log(`END ${label}`);
 
   return {
     output_text: JSON.stringify(resultTemp.finalOutput),
@@ -3398,63 +3403,36 @@ export async function runWorkflow(workflow) {
       };
     }
 
-    // continue with Node 1, Node 2, etc...
-  });
-}
-
-    const conversationHistory = [
-      {
-        role: "user",
-        content: [{ type: "input_text", text: rawInput }],
-      },
-    ];
-
-    const runner = new Runner({
-      traceMetadata: {
-        __trace_source__: "agent-builder",
-        workflow_id: "wf_69e19ca44b48819095fdcc1546128f870c10ef5883d49c83",
-      },
-    });
-
-    // -----------------------------------------------------------------------
-    // NODE 1
-    // -----------------------------------------------------------------------
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
       runner,
-      conversationHistory
+      conversationHistory,
+      "Node 1"
     );
     if (node1Result.output_parsed.status !== "ready") {
       return node1Result;
     }
 
-    // -----------------------------------------------------------------------
-    // NODE 2
-    // -----------------------------------------------------------------------
     const node2Result = await runNode(
       node2UnitContractBuilder,
       runner,
-      conversationHistory
+      conversationHistory,
+      "Node 2"
     );
     if (node2Result.output_parsed.status !== "ready") {
       return node2Result;
     }
 
-    // -----------------------------------------------------------------------
-    // NODE 3
-    // -----------------------------------------------------------------------
     const node3Result = await runNode(
       node3ChapterDrafter,
       runner,
-      conversationHistory
+      conversationHistory,
+      "Node 3"
     );
     if (node3Result.output_parsed.status !== "ready") {
       return node3Result;
     }
 
-    // -----------------------------------------------------------------------
-    // REWRITE LOOP
-    // -----------------------------------------------------------------------
     state.rewrite_cycle_completed = 0;
     state.max_enhancement_cycles = configuredRewriteCycles;
     state.remaining_rewrite_cycles = configuredRewriteCycles;
@@ -3463,7 +3441,8 @@ export async function runWorkflow(workflow) {
       const node4aResult = await runNode(
         node4aUpstreamDraftGate,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 4A"
       );
       if (node4aResult.output_parsed.status !== "ready") {
         return node4aResult;
@@ -3472,7 +3451,8 @@ export async function runWorkflow(workflow) {
       const node4bResult = await runNode(
         node4bEnhancementEvaluator,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 4B"
       );
       if (node4bResult.output_parsed.status !== "ready") {
         return node4bResult;
@@ -3481,7 +3461,8 @@ export async function runWorkflow(workflow) {
       const node5Result = await runNode(
         node5ChapterRewriter,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 5"
       );
       if (node5Result.output_parsed.status !== "ready") {
         return node5Result;
@@ -3500,23 +3481,21 @@ export async function runWorkflow(workflow) {
         0
       );
       state.last_node5_status = node5Result.output_parsed.status;
+
+      console.log("rewrite_cycle_completed", state.rewrite_cycle_completed);
+      console.log("remaining_rewrite_cycles", state.remaining_rewrite_cycles);
     }
 
-    // -----------------------------------------------------------------------
-    // POLISH LOOP INIT
-    // -----------------------------------------------------------------------
     state.max_polish_cycles = configuredPolishCycles;
     state.polish_cycle_completed = 0;
     state.remaining_polish_cycles = configuredPolishCycles;
 
-    // -----------------------------------------------------------------------
-    // POLISH LOOP
-    // -----------------------------------------------------------------------
     while (toInt(state.remaining_polish_cycles) > 0) {
       const node6Result = await runNode(
         node6PolishReadyGate,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 6"
       );
       if (node6Result.output_parsed.status !== "ready") {
         return node6Result;
@@ -3525,7 +3504,8 @@ export async function runWorkflow(workflow) {
       const node7Result = await runNode(
         node7PolishEvaluator,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 7"
       );
       if (node7Result.output_parsed.status !== "ready") {
         return node7Result;
@@ -3534,15 +3514,13 @@ export async function runWorkflow(workflow) {
       const node8Result = await runNode(
         node8PolishRewriter,
         runner,
-        conversationHistory
+        conversationHistory,
+        "Node 8"
       );
       if (node8Result.output_parsed.status !== "ready") {
         return node8Result;
       }
 
-      // CRITICAL FIX:
-      // Never hardcode 1 / 1 / 0 here.
-      // Always copy live loop state from Node 8 output.
       state.polish_cycle_completed = toInt(
         node8Result.output_parsed.polish_cycle_completed,
         0
@@ -3555,31 +3533,28 @@ export async function runWorkflow(workflow) {
         node8Result.output_parsed.remaining_polish_cycles,
         0
       );
+
+      console.log("polish_cycle_completed", state.polish_cycle_completed);
+      console.log("remaining_polish_cycles", state.remaining_polish_cycles);
     }
 
-    // -----------------------------------------------------------------------
-    // NODE 9
-    // -----------------------------------------------------------------------
     const node9Result = await runNode(
       node9FinalChapterOutput,
       runner,
-      conversationHistory
+      conversationHistory,
+      "Node 9"
     );
     if (node9Result.output_parsed.status !== "ready") {
       return node9Result;
     }
 
-    // -----------------------------------------------------------------------
-    // NODE 10
-    // -----------------------------------------------------------------------
     const node10Result = await runNode(
       node10StoryOrchestratorHandoffPackager,
       runner,
-      conversationHistory
+      conversationHistory,
+      "Node 10"
     );
 
-    // CRITICAL FIX:
-    // The workflow must return a final result.
     return node10Result;
   });
 }
@@ -3596,7 +3571,6 @@ export default async (req, context) => {
       );
     }
 
-    // Optional shared-secret auth
     const sharedSecret = Netlify.env.get("AGENT_SHARED_SECRET");
     if (sharedSecret) {
       const providedSecret =
@@ -3615,36 +3589,36 @@ export default async (req, context) => {
     }
 
     let body;
-try {
-  body = await req.json();
-} catch {
-  return json(
-    {
-      ok: false,
-      error: "Invalid JSON body",
-    },
-    400
-  );
-}
+    try {
+      body = await req.json();
+    } catch {
+      return json(
+        {
+          ok: false,
+          error: "Invalid JSON body",
+        },
+        400
+      );
+    }
 
-if (body?.ping === "test") {
-  return json({
-    ok: true,
-    message: "agent endpoint reachable",
-  });
-}
+    if (body?.ping === "test") {
+      return json({
+        ok: true,
+        message: "agent endpoint reachable",
+      });
+    }
 
-if (body?.input_as_text === "{\"ping\":\"test\"}") {
-  return json({
-    ok: true,
-    message: "agent endpoint reachable",
-  });
-}
+    if (body?.input_as_text === "{\"ping\":\"test\"}") {
+      return json({
+        ok: true,
+        message: "agent endpoint reachable",
+      });
+    }
 
-const inputPayload =
-  typeof body?.input_as_text === "string"
-    ? body.input_as_text
-    : JSON.stringify(body);
+    const inputPayload =
+      typeof body?.input_as_text === "string"
+        ? body.input_as_text
+        : JSON.stringify(body);
 
     if (!inputPayload || !inputPayload.trim()) {
       return json(
