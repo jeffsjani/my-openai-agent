@@ -3318,21 +3318,30 @@ function json(data, status = 200) {
 }
 
 async function runNode(agent, runner, conversationHistory, label) {
-  if (label) console.log(`START ${label}`);
+  const startedAt = Date.now();
+  console.log(`[${label}] START`);
 
   const resultTemp = await runner.run(agent, [...conversationHistory]);
+
+  const elapsedMs = Date.now() - startedAt;
+  console.log(`[${label}] runner.run complete in ${elapsedMs}ms`);
 
   conversationHistory.push(
     ...resultTemp.newItems.map((item) => item.rawItem)
   );
 
+  console.log(
+    `[${label}] newItems=${resultTemp.newItems?.length ?? 0}, historySize=${conversationHistory.length}`
+  );
+
   if (!resultTemp.finalOutput) {
+    console.error(`[${label}] finalOutput missing`);
     throw new Error(
       `Agent result is undefined for ${agent?.name ?? "unknown agent"}`
     );
   }
 
-  if (label) console.log(`END ${label}`);
+  console.log(`[${label}] END`);
 
   return {
     output_text: JSON.stringify(resultTemp.finalOutput),
@@ -3342,20 +3351,23 @@ async function runNode(agent, runner, conversationHistory, label) {
 
 export async function runWorkflow(workflow) {
   return await withTrace("CHAPTER WORKER v2", async () => {
-    console.log("runWorkflow entered");
+    const workflowStartedAt = Date.now();
+    console.log("[workflow] runWorkflow entered");
 
     const rawInput =
       typeof workflow?.input_as_text === "string"
         ? workflow.input_as_text
         : JSON.stringify(workflow ?? {});
 
-    console.log("rawInput length", rawInput.length);
+    console.log("[workflow] rawInput length", rawInput.length);
 
     let parsedInput = {};
     try {
       parsedInput = JSON.parse(rawInput);
+      console.log("[workflow] parsedInput JSON parse success");
     } catch {
       parsedInput = {};
+      console.log("[workflow] parsedInput JSON parse failed, using {}");
     }
 
     const configuredRewriteCycles = safeCycleCount(
@@ -3368,8 +3380,16 @@ export async function runWorkflow(workflow) {
       1
     );
 
-    console.log("configuredRewriteCycles", configuredRewriteCycles);
-    console.log("configuredPolishCycles", configuredPolishCycles);
+    console.log("[workflow] configuredRewriteCycles", configuredRewriteCycles);
+    console.log("[workflow] configuredPolishCycles", configuredPolishCycles);
+
+    if (parsedInput?.debug_return_before_openai === true) {
+      console.log("[workflow] debug_return_before_openai hit");
+      return {
+        output_text: JSON.stringify({ ok: true, stage: "before_openai" }),
+        output_parsed: { ok: true, stage: "before_openai" },
+      };
+    }
 
     const state = {
       rewrite_cycle_completed: 0,
@@ -3381,12 +3401,16 @@ export async function runWorkflow(workflow) {
       last_node5_status: null,
     };
 
+    console.log("[workflow] initial state", JSON.stringify(state));
+
     const conversationHistory = [
       {
         role: "user",
         content: [{ type: "input_text", text: rawInput }],
       },
     ];
+
+    console.log("[workflow] conversationHistory initialized");
 
     const runner = new Runner({
       traceMetadata: {
@@ -3395,56 +3419,73 @@ export async function runWorkflow(workflow) {
       },
     });
 
-    if (parsedInput?.debug_return_before_openai === true) {
-      console.log("debug_return_before_openai hit");
-      return {
-        output_text: JSON.stringify({ ok: true, stage: "before_openai" }),
-        output_parsed: { ok: true, stage: "before_openai" },
-      };
-    }
+    console.log("[workflow] Runner initialized");
 
+    // NODE 1
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
       runner,
       conversationHistory,
       "Node 1"
     );
+    console.log("[Node 1] status", node1Result.output_parsed.status);
     if (node1Result.output_parsed.status !== "ready") {
+      console.log("[workflow] exiting after Node 1");
       return node1Result;
     }
 
+    // NODE 2
     const node2Result = await runNode(
       node2UnitContractBuilder,
       runner,
       conversationHistory,
       "Node 2"
     );
+    console.log("[Node 2] status", node2Result.output_parsed.status);
     if (node2Result.output_parsed.status !== "ready") {
+      console.log("[workflow] exiting after Node 2");
       return node2Result;
     }
 
+    // NODE 3
     const node3Result = await runNode(
       node3ChapterDrafter,
       runner,
       conversationHistory,
       "Node 3"
     );
+    console.log("[Node 3] status", node3Result.output_parsed.status);
     if (node3Result.output_parsed.status !== "ready") {
+      console.log("[workflow] exiting after Node 3");
       return node3Result;
     }
 
+    // REWRITE LOOP
     state.rewrite_cycle_completed = 0;
     state.max_enhancement_cycles = configuredRewriteCycles;
     state.remaining_rewrite_cycles = configuredRewriteCycles;
 
+    console.log("[rewrite] loop init", JSON.stringify({
+      rewrite_cycle_completed: state.rewrite_cycle_completed,
+      max_enhancement_cycles: state.max_enhancement_cycles,
+      remaining_rewrite_cycles: state.remaining_rewrite_cycles,
+    }));
+
     while (toInt(state.remaining_rewrite_cycles) > 0) {
+      console.log("[rewrite] loop tick", JSON.stringify({
+        rewrite_cycle_completed: state.rewrite_cycle_completed,
+        remaining_rewrite_cycles: state.remaining_rewrite_cycles,
+      }));
+
       const node4aResult = await runNode(
         node4aUpstreamDraftGate,
         runner,
         conversationHistory,
         "Node 4A"
       );
+      console.log("[Node 4A] status", node4aResult.output_parsed.status);
       if (node4aResult.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 4A");
         return node4aResult;
       }
 
@@ -3454,7 +3495,9 @@ export async function runWorkflow(workflow) {
         conversationHistory,
         "Node 4B"
       );
+      console.log("[Node 4B] status", node4bResult.output_parsed.status);
       if (node4bResult.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 4B");
         return node4bResult;
       }
 
@@ -3464,7 +3507,9 @@ export async function runWorkflow(workflow) {
         conversationHistory,
         "Node 5"
       );
+      console.log("[Node 5] status", node5Result.output_parsed.status);
       if (node5Result.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 5");
         return node5Result;
       }
 
@@ -3482,22 +3527,42 @@ export async function runWorkflow(workflow) {
       );
       state.last_node5_status = node5Result.output_parsed.status;
 
-      console.log("rewrite_cycle_completed", state.rewrite_cycle_completed);
-      console.log("remaining_rewrite_cycles", state.remaining_rewrite_cycles);
+      console.log("[rewrite] state updated", JSON.stringify({
+        rewrite_cycle_completed: state.rewrite_cycle_completed,
+        max_enhancement_cycles: state.max_enhancement_cycles,
+        remaining_rewrite_cycles: state.remaining_rewrite_cycles,
+        last_node5_status: state.last_node5_status,
+      }));
     }
 
+    console.log("[rewrite] loop complete");
+
+    // POLISH LOOP INIT
     state.max_polish_cycles = configuredPolishCycles;
     state.polish_cycle_completed = 0;
     state.remaining_polish_cycles = configuredPolishCycles;
 
+    console.log("[polish] loop init", JSON.stringify({
+      max_polish_cycles: state.max_polish_cycles,
+      polish_cycle_completed: state.polish_cycle_completed,
+      remaining_polish_cycles: state.remaining_polish_cycles,
+    }));
+
     while (toInt(state.remaining_polish_cycles) > 0) {
+      console.log("[polish] loop tick", JSON.stringify({
+        polish_cycle_completed: state.polish_cycle_completed,
+        remaining_polish_cycles: state.remaining_polish_cycles,
+      }));
+
       const node6Result = await runNode(
         node6PolishReadyGate,
         runner,
         conversationHistory,
         "Node 6"
       );
+      console.log("[Node 6] status", node6Result.output_parsed.status);
       if (node6Result.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 6");
         return node6Result;
       }
 
@@ -3507,7 +3572,9 @@ export async function runWorkflow(workflow) {
         conversationHistory,
         "Node 7"
       );
+      console.log("[Node 7] status", node7Result.output_parsed.status);
       if (node7Result.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 7");
         return node7Result;
       }
 
@@ -3517,7 +3584,9 @@ export async function runWorkflow(workflow) {
         conversationHistory,
         "Node 8"
       );
+      console.log("[Node 8] status", node8Result.output_parsed.status);
       if (node8Result.output_parsed.status !== "ready") {
+        console.log("[workflow] exiting after Node 8");
         return node8Result;
       }
 
@@ -3534,26 +3603,39 @@ export async function runWorkflow(workflow) {
         0
       );
 
-      console.log("polish_cycle_completed", state.polish_cycle_completed);
-      console.log("remaining_polish_cycles", state.remaining_polish_cycles);
+      console.log("[polish] state updated", JSON.stringify({
+        polish_cycle_completed: state.polish_cycle_completed,
+        max_polish_cycles: state.max_polish_cycles,
+        remaining_polish_cycles: state.remaining_polish_cycles,
+      }));
     }
 
+    console.log("[polish] loop complete");
+
+    // NODE 9
     const node9Result = await runNode(
       node9FinalChapterOutput,
       runner,
       conversationHistory,
       "Node 9"
     );
+    console.log("[Node 9] status", node9Result.output_parsed.status);
     if (node9Result.output_parsed.status !== "ready") {
+      console.log("[workflow] exiting after Node 9");
       return node9Result;
     }
 
+    // NODE 10
     const node10Result = await runNode(
       node10StoryOrchestratorHandoffPackager,
       runner,
       conversationHistory,
       "Node 10"
     );
+    console.log("[Node 10] status", node10Result.output_parsed.status);
+
+    const totalElapsedMs = Date.now() - workflowStartedAt;
+    console.log("[workflow] complete in ms", totalElapsedMs);
 
     return node10Result;
   });
@@ -3612,6 +3694,13 @@ export default async (req, context) => {
       return json({
         ok: true,
         message: "agent endpoint reachable",
+      });
+    }
+
+    if (body?.debug_return_before_openai === true) {
+      return json({
+        ok: true,
+        message: "debug shortcut accepted",
       });
     }
 
