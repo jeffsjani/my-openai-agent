@@ -3466,6 +3466,95 @@ export async function runWorkflow(workflow) {
       };
     }
 
+    if (parsedInput?.debug_mock_node1 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          canon_basis: "master_story_bible",
+          active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+          drafting_bible_stack: {
+            active_every_time: [
+              {
+                section_number: 12,
+                section_name: "Chapter-by-Chapter Breakdown",
+                packet_name: "unit_contracts",
+                drafting_role: "Controls objective, conflict, reversal, reveal, carry-forward, ending hook, drafting beats, and scene mission."
+              }
+            ]
+          },
+          downstream_store_requests: {
+            drafting_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "DraftingHouseRules.pdf",
+              required_for_operations: ["draft", "evaluate", "rewrite"],
+              priority_rules: ["12", "13", "13A", "22", "23"],
+              structure_lock_policy: "not_required"
+            },
+            polish_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "PolishHouseRules.pdf",
+              required_for_operations: ["polish"],
+              priority_rules: [],
+              structure_lock_policy: "required"
+            }
+          },
+          missing_required_inputs: [],
+          blocked_reasons: [],
+          next_node: "N2_Unit_Contract_Builder"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          canon_basis: "master_story_bible",
+          active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+          drafting_bible_stack: {
+            active_every_time: [
+              {
+                section_number: 12,
+                section_name: "Chapter-by-Chapter Breakdown",
+                packet_name: "unit_contracts",
+                drafting_role: "Controls objective, conflict, reversal, reveal, carry-forward, ending hook, drafting beats, and scene mission."
+              }
+            ]
+          },
+          downstream_store_requests: {
+            drafting_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "DraftingHouseRules.pdf",
+              required_for_operations: ["draft", "evaluate", "rewrite"],
+              priority_rules: ["12", "13", "13A", "22", "23"],
+              structure_lock_policy: "not_required"
+            },
+            polish_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "PolishHouseRules.pdf",
+              required_for_operations: ["polish"],
+              priority_rules: [],
+              structure_lock_policy: "required"
+            }
+          },
+          missing_required_inputs: [],
+          blocked_reasons: [],
+          next_node: "N2_Unit_Contract_Builder"
+        }
+      };
+    }
+
     // NODE 1
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
