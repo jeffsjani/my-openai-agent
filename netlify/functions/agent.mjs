@@ -5294,6 +5294,187 @@ export async function runWorkflow(workflow) {
       };
     }
 
+
+    if (parsedInput?.debug_mock_node9 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "final_output",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          polish_cycles_completed: 1,
+          final_source_node: "N8_Polish_Rewriter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          final_output_summary: "Final chapter output displayed from the latest Node 8 ready polish rewrite after the configured polish loop completed.",
+          blocked_reasons: [],
+          next_node: ""
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "final_output",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          configured_max_polish_cycles: 1,
+          polish_cycles_completed: 1,
+          final_source_node: "N8_Polish_Rewriter",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1\nBeirut Bar",
+              drafted_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          final_output_summary: "Final chapter output displayed from the latest Node 8 ready polish rewrite after the configured polish loop completed.",
+          blocked_reasons: [],
+          next_node: ""
+        }
+      };
+    }
+
+    if (parsedInput?.debug_mock_node10 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "story_orchestrator_handoff",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          final_source_node: "N9_Final_Chapter_Output",
+          chapter_number: 1,
+          chapter_title: "Beirut Bar",
+          unit_label: "Chapter 1 - Beirut Bar",
+          chapter_heading: "Chapter 1\nBeirut Bar",
+          final_chapter_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+          final_word_count: 61,
+          chapter_summary: "Callan and Elise recognize each other as immediate equals in a Beirut hotel bar, share charged mutual recognition, and are pulled apart before the romantic payoff can land.",
+          carry_forward_summary: "Denied payoff primes the Beirut mission reunion.",
+          end_of_chapter_transition_snippet: "A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+          ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+          open_threads_after_chapter: {
+            threads_opened: ["Mutual recognition between Callan and Elise"],
+            threads_advanced: [],
+            threads_resolved: [],
+            threads_deferred: ["Beirut mission reunion"]
+          },
+          relationship_state_delta: {
+            characters_affected: ["Callan Rook", "Elise Harrow"],
+            relationship_changes: ["Attraction and operational recognition become active before trust is safe."]
+          },
+          object_motif_delta: {
+            objects_introduced: [],
+            objects_changed: [],
+            motifs_activated: ["Mirrored amber light", "Denied romantic payoff"],
+            motifs_paid_off: []
+          },
+          location_time_state: {
+            ending_location: "Beirut hotel bar exit corridor",
+            ending_time_marker: null,
+            timeline_delta: null,
+            travel_or_transition_state: "Both are pulled into separate operational summons."
+          },
+          continuity_flags: {
+            new_character_names: ["Elise Harrow"],
+            new_locations: ["Beirut hotel bar"],
+            new_objects: [],
+            new_promises_or_setups: ["Beirut mission reunion"]
+          },
+          worker_metrics: {
+            rewrite_cycles_configured: parsedInput?.run_config?.rewrite_cycles ?? null,
+            polish_cycles_configured: parsedInput?.run_config?.polish_cycles ?? null,
+            mode: parsedInput?.run_config?.mode ?? null,
+            final_source_node: "N9_Final_Chapter_Output"
+          },
+          handoff_summary: "Story Orchestrator handoff package ready for Chapter 1 - Beirut Bar, including final chapter text, continuity summary, transition snippet, and downstream carry-forward state.",
+          blocked_reasons: [],
+          next_node: ""
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "story_orchestrator_handoff",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          final_source_node: "N9_Final_Chapter_Output",
+          chapter_number: 1,
+          chapter_title: "Beirut Bar",
+          unit_label: "Chapter 1 - Beirut Bar",
+          chapter_heading: "Chapter 1\nBeirut Bar",
+          final_chapter_text: "Polished mock text for Chapter 1 - Beirut Bar. Callan sat in mirrored amber light reading the room for the moment polite order turned false. Elise selected him with unnerving precision, and the talk between them became equal parts flirtation, surveillance, and mutual recognition. A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+          final_word_count: 61,
+          chapter_summary: "Callan and Elise recognize each other as immediate equals in a Beirut hotel bar, share charged mutual recognition, and are pulled apart before the romantic payoff can land.",
+          carry_forward_summary: "Denied payoff primes the Beirut mission reunion.",
+          end_of_chapter_transition_snippet: "A flash of dry humor opened a livable pocket between them. Before the moment could become real, twin operational summons cut across the room and forced them apart.",
+          ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+          open_threads_after_chapter: {
+            threads_opened: ["Mutual recognition between Callan and Elise"],
+            threads_advanced: [],
+            threads_resolved: [],
+            threads_deferred: ["Beirut mission reunion"]
+          },
+          relationship_state_delta: {
+            characters_affected: ["Callan Rook", "Elise Harrow"],
+            relationship_changes: ["Attraction and operational recognition become active before trust is safe."]
+          },
+          object_motif_delta: {
+            objects_introduced: [],
+            objects_changed: [],
+            motifs_activated: ["Mirrored amber light", "Denied romantic payoff"],
+            motifs_paid_off: []
+          },
+          location_time_state: {
+            ending_location: "Beirut hotel bar exit corridor",
+            ending_time_marker: null,
+            timeline_delta: null,
+            travel_or_transition_state: "Both are pulled into separate operational summons."
+          },
+          continuity_flags: {
+            new_character_names: ["Elise Harrow"],
+            new_locations: ["Beirut hotel bar"],
+            new_objects: [],
+            new_promises_or_setups: ["Beirut mission reunion"]
+          },
+          worker_metrics: {
+            rewrite_cycles_configured: parsedInput?.run_config?.rewrite_cycles ?? null,
+            polish_cycles_configured: parsedInput?.run_config?.polish_cycles ?? null,
+            mode: parsedInput?.run_config?.mode ?? null,
+            final_source_node: "N9_Final_Chapter_Output"
+          },
+          handoff_summary: "Story Orchestrator handoff package ready for Chapter 1 - Beirut Bar, including final chapter text, continuity summary, transition snippet, and downstream carry-forward state.",
+          blocked_reasons: [],
+          next_node: ""
+        }
+      };
+    }
+
     // NODE 1
     // NODE 1
     const node1Result = await runNode(
