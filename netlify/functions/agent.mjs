@@ -5475,6 +5475,37 @@ export async function runWorkflow(workflow) {
       };
     }
 
+
+    if (parsedInput?.debug_small_node1_surface === true) {
+      const minimalNode1Input = {
+        story_run_id: parsedInput?.story_run_id ?? null,
+        project_id: parsedInput?.project_id ?? null,
+        chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+        chapter_context: parsedInput?.chapter_context ?? null,
+        run_config: parsedInput?.run_config ?? null,
+        user_request: parsedInput?.user_request ?? "Draft Chapter 1 - Beirut Bar",
+        master_story_bible_present: true,
+        master_story_bible_text:
+          "Section 12 includes Chapter 1 - Beirut Bar. Requested unit is Chapter 1 - Beirut Bar. Use canon basis master_story_bible."
+      };
+
+      const tempHistory = [
+        {
+          role: "user",
+          content: [{ type: "input_text", text: JSON.stringify(minimalNode1Input) }]
+        }
+      ];
+
+      const node1Result = await runNode(
+        node1IntakeScopeLockCanonBasisAndStoreRouting,
+        runner,
+        tempHistory,
+        "Node 1 small-surface"
+      );
+
+      return node1Result;
+    }
+
     // NODE 1
     // NODE 1
     const node1Result = await runNode(
