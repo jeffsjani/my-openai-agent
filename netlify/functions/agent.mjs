@@ -4181,6 +4181,655 @@ export async function runWorkflow(workflow) {
     }
 
     // NODE 1
+
+    if (parsedInput?.debug_mock_node3 === true) {
+      return {
+        output_text: JSON.stringify({
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          canon_basis: "master_story_bible",
+          active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+          drafting_bible_stack: {
+            active_every_time: [
+              {
+                section_number: 12,
+                section_name: "Chapter-by-Chapter Breakdown",
+                packet_name: "unit_contracts",
+                drafting_role: "Controls objective, conflict, reversal, reveal, carry-forward, ending hook, drafting beats, and scene mission."
+              },
+              {
+                section_number: 3,
+                section_name: "Writing Style & Narrative Voice",
+                packet_name: "style_packet",
+                drafting_role: "Controls prose texture, propulsion, rhythm, descriptive priority, suspense logic, atmosphere, and emotional handling."
+              },
+              {
+                section_number: 15,
+                section_name: "Dialogue & Voice Cheat Sheet",
+                packet_name: "dialogue_voice_packet",
+                drafting_role: "Controls dialogue differentiation, subtext, interruption, silence, flirtation, institutional speech, and voice discipline."
+              }
+            ]
+          },
+          style_packet: {
+            source_section_number: 3,
+            narrative_mandate: "Prestige espionage-romance mode.",
+            prose_texture: "Lean, elegant, sensual, exact.",
+            opening_propulsion: "Impact before explanation.",
+            narrative_rhythm: "Compression under pressure.",
+            descriptive_priority: "Rooms, thresholds, mirrors, corridors, objects, bodies in systems.",
+            object_engine_rule: "Track tactile leverage objects through scenes.",
+            emotional_handling: "Adult romance contaminated by duty.",
+            pleasure_rule: "The couple must be pleasurable as well as wounded.",
+            emotion_inside_motion: "Danger beats must force human charge into the open.",
+            suspense_rule: "What happens next and what does it cost between these people.",
+            political_handling: "Institutions must feel credible, specific, and morally complex.",
+            action_handling: "Route-based, object-based, rescue-driven action.",
+            dialogue_relation: "Dialogue should feel human, pressure-bearing, and legible.",
+            pov_discipline: "Controlled, intelligent, emotionally charged POV.",
+            atmosphere_rule: "Beirut glows and ruptures.",
+            ending_rule: "Protect moral residue.",
+            suspense_sequence_pass_criteria: [
+              "A tactical choice is also a relational choice.",
+              "The emotional charge is active during danger."
+            ],
+            suspense_sequence_failure_signs: [
+              "The action could happen between interchangeable characters.",
+              "The danger changes logistics but not intimacy."
+            ],
+            forbidden_style_failures: [
+              "Ornate prose that blunts urgency.",
+              "Generic spy cool without emotional price."
+            ],
+            style_shorthand: "Prestige espionage density. Adult romantic suspense. Moral residue."
+          },
+          dialogue_voice_packet: {
+            source_section_number: 15,
+            dialogue_mandate: "Subtext before explanation, but meaning remains legible.",
+            voice_differentiation_rules: [
+              "Callan sounds calm, plain, nearly kind.",
+              "Elise sounds controlled, deliberate, and costly."
+            ],
+            subtext_rules: [
+              "Romantic exchanges must also move leverage."
+            ],
+            compression_rules: [
+              "Do not make all dialogue uniformly polished."
+            ],
+            interruption_and_silence_rules: [
+              "Use interruption and silence as pressure."
+            ],
+            flirtation_and_desire_rules: [
+              "Recognition fused to danger."
+            ],
+            institutional_speech_rules: [
+              "Institutional language must carry human consequence."
+            ],
+            voice_forbidden_failures: [
+              "Pseudo-profound speech.",
+              "Same-voice drift across characters."
+            ],
+            dialogue_voice_shorthand: "Pressure-true, character-specific, legible."
+          },
+          locked_draft_priorities_packet: {
+            source_section_number: 19,
+            locked_draft_mandate: "Protect Beirut as the contamination that governs the franchise.",
+            nonnegotiable_priorities: [
+              "Protect the oxygen beats between Callan and Elise.",
+              "Stage action through routes, objects, and rescue choices."
+            ],
+            do_not_change: [
+              "Callan and Elise are immediate equals.",
+              "Beirut is the canonical wound."
+            ],
+            escalation_priorities: [
+              "Impact before explanation.",
+              "Pleasure before denial."
+            ],
+            relationship_lock_points: [
+              "Accusation fused to dependence.",
+              "Recognition fused to danger."
+            ],
+            object_and_motif_lock_points: [
+              "Mirrored amber glass.",
+              "Cracked watch residue."
+            ],
+            ending_and_payoff_lock_points: [
+              "Denied romantic payoff leading into Beirut Mission."
+            ],
+            locked_priorities_shorthand: "Protect contamination, oxygen, and route-based pressure."
+          },
+          character_constellation_packet: {
+            source_section_number: 7,
+            constellation_mandate: "Callan and Elise are dangerous complements.",
+            central_pairing: "Callan Rook and Elise Harrow",
+            major_characters: [
+              {
+                name: "Callan Rook",
+                role: "Australian crisis extractor",
+                function: "Mythic rescue lead",
+                relation_to_pov: "self"
+              },
+              {
+                name: "Elise Harrow",
+                role: "MI6 field architect",
+                function: "Co-equal icon lead",
+                relation_to_pov: "attraction and operational equal"
+              }
+            ],
+            relationship_pressure_lines: [
+              "Attraction collides with operational secrecy."
+            ],
+            attraction_conflict_axes: [
+              "Recognition fused to danger."
+            ],
+            trust_fault_lines: [
+              "Immediate mutual recognition before trust is safe."
+            ],
+            constellation_shorthand: "Dangerous complements."
+          },
+          structural_spine_packet: {
+            source_section_number: 11,
+            current_unit_spine_function: "Romantic ignition before founding wound.",
+            upstream_dependencies: [
+              "Athens myth display and cracked-watch residue."
+            ],
+            downstream_setup_payoffs: [
+              "Denied payoff primes Beirut Mission reunion."
+            ],
+            escalation_logic: [
+              "Myth under fire -> bar recognition -> mission wound."
+            ],
+            spine_shorthand: "Romantic ignition under hidden urgency."
+          },
+          setpiece_symbol_architecture_packet: {
+            source_section_number: 13,
+            setpiece_mandate: "Respectable surface with hidden operational pressure.",
+            chapter_relevant_setpieces: [
+              "Beirut bar selection and near-kiss denial."
+            ],
+            object_symbol_rules: [
+              "Mirrored amber glass is active atmosphere and symbol."
+            ],
+            visual_escalation_cues: [
+              "Exit line, mirrored surfaces, unfinished look."
+            ],
+            setpiece_failure_signs: [
+              "Generic flirtation without operational consequence."
+            ],
+            architecture_shorthand: "Seduction as pressure geometry."
+          },
+          world_setting_palette_packet: {
+            source_section_number: 8,
+            setting_palette_rules: [
+              "Contemporary, politically plausible, sensorially exact."
+            ],
+            city_specific_texture_rules: [
+              "Beirut glows and ruptures.",
+              "Mirrored amber light."
+            ],
+            environmental_pressure_cues: [
+              "Bar edges, exits, corridor pull."
+            ],
+            institutional_surface_rules: [
+              "Elegant hotel calm masking hidden urgency."
+            ],
+            palette_shorthand: "Mirrored amber Beirut under hidden pressure."
+          },
+          thematic_moral_architecture_packet: {
+            source_section_number: 9,
+            thematic_mandate: "Truth, intimacy, and leverage are fused.",
+            central_thematic_questions: [
+              "What kind of truth can a room survive?"
+            ],
+            moral_pressure_lines: [
+              "Attraction and duty contaminate each other."
+            ],
+            private_public_cost_rules: [
+              "Private recognition opens into public consequence."
+            ],
+            contradiction_and_complicity_rules: [
+              "Immediate intimacy already sits inside hidden systems."
+            ],
+            thematic_shorthand: "Contaminated intimacy under managed truth."
+          },
+          signature_verbal_deployment_packet: {
+            source_section_number: 21,
+            signature_language_rules: [
+              "Callan sounds calm and plain.",
+              "Elise sounds deliberate and costly."
+            ],
+            recurring_phrase_motifs: [
+              "What people can bear."
+            ],
+            metaphor_and_comparison_rules: [
+              "Precision over ornament."
+            ],
+            verbal_do_not_use: [
+              "Pseudo-profound generic spy talk."
+            ],
+            signature_shorthand: "Pressure-true signature voice."
+          },
+          research_authenticity_packet: {
+            source_section_number: 18,
+            authenticity_mandate: "Grounded in recognizable allied-security culture and plausible urban texture.",
+            procedural_truth_rules: [
+              "Hospitality and diplomatic surfaces must feel real."
+            ],
+            terminology_and_register_rules: [
+              "Avoid fake technical swagger."
+            ],
+            domain_specific_constraints: [
+              "Keep Beirut hotel-bar dynamics credible and specific."
+            ],
+            realism_do_not_fake: [
+              "Do not invent implausible operator jargon."
+            ],
+            authenticity_shorthand: "Plausible, tactile, politically literate."
+          },
+          prestige_quality_alignment_packet: {
+            source_section_number: 4,
+            prestige_mandate: "Prestige-level espionage density with immediate commercial legibility.",
+            quality_benchmarks: [
+              "Elegant but emotionally charged.",
+              "Trailer-legible without flattening intelligence."
+            ],
+            anti_generic_failures: [
+              "Generic spy cool.",
+              "Empty glamour."
+            ],
+            audience_promise_rules: [
+              "The couple must be thrilling before the plot weaponizes them."
+            ],
+            prestige_shorthand: "Prestige espionage-romance with commercial propulsion."
+          },
+          unit_contracts: [
+            {
+              source_section_number: 12,
+              movement_label: "Prologue",
+              movement_approximate_length: 6400,
+              unit_label: "Chapter 1 - Beirut Bar",
+              target_word_count: 1800,
+              pov: "Callan",
+              setting: "Beirut hotel bar, mirrored amber light, private booth edge, exit corridor",
+              objective: "Establish Callan and Elise as immediate equals and make the audience want the romance before the story denies it.",
+              conflict: "Attraction, cover identity, myth residue, and hidden urgency collide before the moment can become personal.",
+              reversal: "Precise flirtation is broken by twin operational summons before intimacy can become real.",
+              reveal: "Callan and Elise already belong to the same hidden world and can read each other’s operational grammar.",
+              carry_forward: "Denied romantic payoff primes the Beirut mission reunion.",
+              ending_hook: "They are pulled apart before the romantic payoff.",
+              drafting_beats: [
+                "Callan reads the room for the moment polite order turns false.",
+                "Elise enters and selects Callan with precision.",
+                "They circle exits, mirrors, time, and hidden lies.",
+                "A dry humor beat creates oxygen.",
+                "Twin operational summons break the moment."
+              ]
+            }
+          ],
+          store_packet_status: "preserved",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1
+Beirut Bar",
+              drafted_text: "Mock drafted text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for fracture. Elise selects him with impossible precision. Their conversation becomes mutual recognition under hidden pressure, oxygen threaded through surveillance instincts and withheld affiliations. A dry humor beat opens the possibility of pleasure. Before the moment can become real, twin operational summons break the spell and pull them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          downstream_store_requests: {
+            drafting_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "DraftingHouseRules.pdf",
+              required_for_operations: ["draft", "evaluate", "rewrite"],
+              priority_rules: ["12", "13", "13A", "22", "23"],
+              structure_lock_policy: "not_required"
+            },
+            polish_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "PolishHouseRules.pdf",
+              required_for_operations: ["polish"],
+              priority_rules: [],
+              structure_lock_policy: "required"
+            }
+          },
+          missing_required_inputs: [],
+          blocked_reasons: [],
+          next_node: "N4A_Upstream_Draft_Gate"
+        }),
+        output_parsed: {
+          story_run_id: parsedInput?.story_run_id ?? null,
+          project_id: parsedInput?.project_id ?? null,
+          chapter_worker_version: parsedInput?.chapter_worker_version ?? null,
+          chapter_context: parsedInput?.chapter_context ?? null,
+          run_config: parsedInput?.run_config ?? null,
+          status: "ready",
+          requested_operation: "draft",
+          resolved_scope: "Chapter 1 - Beirut Bar only",
+          target_units_requested: ["Chapter 1 - Beirut Bar"],
+          canon_basis: "master_story_bible",
+          active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+          drafting_bible_stack: {
+            active_every_time: [
+              {
+                section_number: 12,
+                section_name: "Chapter-by-Chapter Breakdown",
+                packet_name: "unit_contracts",
+                drafting_role: "Controls objective, conflict, reversal, reveal, carry-forward, ending hook, drafting beats, and scene mission."
+              },
+              {
+                section_number: 3,
+                section_name: "Writing Style & Narrative Voice",
+                packet_name: "style_packet",
+                drafting_role: "Controls prose texture, propulsion, rhythm, descriptive priority, suspense logic, atmosphere, and emotional handling."
+              },
+              {
+                section_number: 15,
+                section_name: "Dialogue & Voice Cheat Sheet",
+                packet_name: "dialogue_voice_packet",
+                drafting_role: "Controls dialogue differentiation, subtext, interruption, silence, flirtation, institutional speech, and voice discipline."
+              }
+            ]
+          },
+          style_packet: {
+            source_section_number: 3,
+            narrative_mandate: "Prestige espionage-romance mode.",
+            prose_texture: "Lean, elegant, sensual, exact.",
+            opening_propulsion: "Impact before explanation.",
+            narrative_rhythm: "Compression under pressure.",
+            descriptive_priority: "Rooms, thresholds, mirrors, corridors, objects, bodies in systems.",
+            object_engine_rule: "Track tactile leverage objects through scenes.",
+            emotional_handling: "Adult romance contaminated by duty.",
+            pleasure_rule: "The couple must be pleasurable as well as wounded.",
+            emotion_inside_motion: "Danger beats must force human charge into the open.",
+            suspense_rule: "What happens next and what does it cost between these people.",
+            political_handling: "Institutions must feel credible, specific, and morally complex.",
+            action_handling: "Route-based, object-based, rescue-driven action.",
+            dialogue_relation: "Dialogue should feel human, pressure-bearing, and legible.",
+            pov_discipline: "Controlled, intelligent, emotionally charged POV.",
+            atmosphere_rule: "Beirut glows and ruptures.",
+            ending_rule: "Protect moral residue.",
+            suspense_sequence_pass_criteria: [
+              "A tactical choice is also a relational choice.",
+              "The emotional charge is active during danger."
+            ],
+            suspense_sequence_failure_signs: [
+              "The action could happen between interchangeable characters.",
+              "The danger changes logistics but not intimacy."
+            ],
+            forbidden_style_failures: [
+              "Ornate prose that blunts urgency.",
+              "Generic spy cool without emotional price."
+            ],
+            style_shorthand: "Prestige espionage density. Adult romantic suspense. Moral residue."
+          },
+          dialogue_voice_packet: {
+            source_section_number: 15,
+            dialogue_mandate: "Subtext before explanation, but meaning remains legible.",
+            voice_differentiation_rules: [
+              "Callan sounds calm, plain, nearly kind.",
+              "Elise sounds controlled, deliberate, and costly."
+            ],
+            subtext_rules: [
+              "Romantic exchanges must also move leverage."
+            ],
+            compression_rules: [
+              "Do not make all dialogue uniformly polished."
+            ],
+            interruption_and_silence_rules: [
+              "Use interruption and silence as pressure."
+            ],
+            flirtation_and_desire_rules: [
+              "Recognition fused to danger."
+            ],
+            institutional_speech_rules: [
+              "Institutional language must carry human consequence."
+            ],
+            voice_forbidden_failures: [
+              "Pseudo-profound speech.",
+              "Same-voice drift across characters."
+            ],
+            dialogue_voice_shorthand: "Pressure-true, character-specific, legible."
+          },
+          locked_draft_priorities_packet: {
+            source_section_number: 19,
+            locked_draft_mandate: "Protect Beirut as the contamination that governs the franchise.",
+            nonnegotiable_priorities: [
+              "Protect the oxygen beats between Callan and Elise.",
+              "Stage action through routes, objects, and rescue choices."
+            ],
+            do_not_change: [
+              "Callan and Elise are immediate equals.",
+              "Beirut is the canonical wound."
+            ],
+            escalation_priorities: [
+              "Impact before explanation.",
+              "Pleasure before denial."
+            ],
+            relationship_lock_points: [
+              "Accusation fused to dependence.",
+              "Recognition fused to danger."
+            ],
+            object_and_motif_lock_points: [
+              "Mirrored amber glass.",
+              "Cracked watch residue."
+            ],
+            ending_and_payoff_lock_points: [
+              "Denied romantic payoff leading into Beirut Mission."
+            ],
+            locked_priorities_shorthand: "Protect contamination, oxygen, and route-based pressure."
+          },
+          character_constellation_packet: {
+            source_section_number: 7,
+            constellation_mandate: "Callan and Elise are dangerous complements.",
+            central_pairing: "Callan Rook and Elise Harrow",
+            major_characters: [
+              {
+                name: "Callan Rook",
+                role: "Australian crisis extractor",
+                function: "Mythic rescue lead",
+                relation_to_pov: "self"
+              },
+              {
+                name: "Elise Harrow",
+                role: "MI6 field architect",
+                function: "Co-equal icon lead",
+                relation_to_pov: "attraction and operational equal"
+              }
+            ],
+            relationship_pressure_lines: [
+              "Attraction collides with operational secrecy."
+            ],
+            attraction_conflict_axes: [
+              "Recognition fused to danger."
+            ],
+            trust_fault_lines: [
+              "Immediate mutual recognition before trust is safe."
+            ],
+            constellation_shorthand: "Dangerous complements."
+          },
+          structural_spine_packet: {
+            source_section_number: 11,
+            current_unit_spine_function: "Romantic ignition before founding wound.",
+            upstream_dependencies: [
+              "Athens myth display and cracked-watch residue."
+            ],
+            downstream_setup_payoffs: [
+              "Denied payoff primes Beirut Mission reunion."
+            ],
+            escalation_logic: [
+              "Myth under fire -> bar recognition -> mission wound."
+            ],
+            spine_shorthand: "Romantic ignition under hidden urgency."
+          },
+          setpiece_symbol_architecture_packet: {
+            source_section_number: 13,
+            setpiece_mandate: "Respectable surface with hidden operational pressure.",
+            chapter_relevant_setpieces: [
+              "Beirut bar selection and near-kiss denial."
+            ],
+            object_symbol_rules: [
+              "Mirrored amber glass is active atmosphere and symbol."
+            ],
+            visual_escalation_cues: [
+              "Exit line, mirrored surfaces, unfinished look."
+            ],
+            setpiece_failure_signs: [
+              "Generic flirtation without operational consequence."
+            ],
+            architecture_shorthand: "Seduction as pressure geometry."
+          },
+          world_setting_palette_packet: {
+            source_section_number: 8,
+            setting_palette_rules: [
+              "Contemporary, politically plausible, sensorially exact."
+            ],
+            city_specific_texture_rules: [
+              "Beirut glows and ruptures.",
+              "Mirrored amber light."
+            ],
+            environmental_pressure_cues: [
+              "Bar edges, exits, corridor pull."
+            ],
+            institutional_surface_rules: [
+              "Elegant hotel calm masking hidden urgency."
+            ],
+            palette_shorthand: "Mirrored amber Beirut under hidden pressure."
+          },
+          thematic_moral_architecture_packet: {
+            source_section_number: 9,
+            thematic_mandate: "Truth, intimacy, and leverage are fused.",
+            central_thematic_questions: [
+              "What kind of truth can a room survive?"
+            ],
+            moral_pressure_lines: [
+              "Attraction and duty contaminate each other."
+            ],
+            private_public_cost_rules: [
+              "Private recognition opens into public consequence."
+            ],
+            contradiction_and_complicity_rules: [
+              "Immediate intimacy already sits inside hidden systems."
+            ],
+            thematic_shorthand: "Contaminated intimacy under managed truth."
+          },
+          signature_verbal_deployment_packet: {
+            source_section_number: 21,
+            signature_language_rules: [
+              "Callan sounds calm and plain.",
+              "Elise sounds deliberate and costly."
+            ],
+            recurring_phrase_motifs: [
+              "What people can bear."
+            ],
+            metaphor_and_comparison_rules: [
+              "Precision over ornament."
+            ],
+            verbal_do_not_use: [
+              "Pseudo-profound generic spy talk."
+            ],
+            signature_shorthand: "Pressure-true signature voice."
+          },
+          research_authenticity_packet: {
+            source_section_number: 18,
+            authenticity_mandate: "Grounded in recognizable allied-security culture and plausible urban texture.",
+            procedural_truth_rules: [
+              "Hospitality and diplomatic surfaces must feel real."
+            ],
+            terminology_and_register_rules: [
+              "Avoid fake technical swagger."
+            ],
+            domain_specific_constraints: [
+              "Keep Beirut hotel-bar dynamics credible and specific."
+            ],
+            realism_do_not_fake: [
+              "Do not invent implausible operator jargon."
+            ],
+            authenticity_shorthand: "Plausible, tactile, politically literate."
+          },
+          prestige_quality_alignment_packet: {
+            source_section_number: 4,
+            prestige_mandate: "Prestige-level espionage density with immediate commercial legibility.",
+            quality_benchmarks: [
+              "Elegant but emotionally charged.",
+              "Trailer-legible without flattening intelligence."
+            ],
+            anti_generic_failures: [
+              "Generic spy cool.",
+              "Empty glamour."
+            ],
+            audience_promise_rules: [
+              "The couple must be thrilling before the plot weaponizes them."
+            ],
+            prestige_shorthand: "Prestige espionage-romance with commercial propulsion."
+          },
+          unit_contracts: [
+            {
+              source_section_number: 12,
+              movement_label: "Prologue",
+              movement_approximate_length: 6400,
+              unit_label: "Chapter 1 - Beirut Bar",
+              target_word_count: 1800,
+              pov: "Callan",
+              setting: "Beirut hotel bar, mirrored amber light, private booth edge, exit corridor",
+              objective: "Establish Callan and Elise as immediate equals and make the audience want the romance before the story denies it.",
+              conflict: "Attraction, cover identity, myth residue, and hidden urgency collide before the moment can become personal.",
+              reversal: "Precise flirtation is broken by twin operational summons before intimacy can become real.",
+              reveal: "Callan and Elise already belong to the same hidden world and can read each other’s operational grammar.",
+              carry_forward: "Denied romantic payoff primes the Beirut mission reunion.",
+              ending_hook: "They are pulled apart before the romantic payoff.",
+              drafting_beats: [
+                "Callan reads the room for the moment polite order turns false.",
+                "Elise enters and selects Callan with precision.",
+                "They circle exits, mirrors, time, and hidden lies.",
+                "A dry humor beat creates oxygen.",
+                "Twin operational summons break the moment."
+              ]
+            }
+          ],
+          store_packet_status: "preserved",
+          drafted_units: [
+            {
+              unit_label: "Chapter 1 - Beirut Bar",
+              chapter_heading: "Chapter 1
+Beirut Bar",
+              drafted_text: "Mock drafted text for Chapter 1 - Beirut Bar. Callan sits in mirrored amber light reading the room for fracture. Elise selects him with impossible precision. Their conversation becomes mutual recognition under hidden pressure, oxygen threaded through surveillance instincts and withheld affiliations. A dry humor beat opens the possibility of pleasure. Before the moment can become real, twin operational summons break the spell and pull them apart.",
+              ending_condition: "Callan and Elise are pulled apart before the romantic payoff.",
+              carry_forward_summary: "Denied payoff primes the Beirut mission reunion."
+            }
+          ],
+          downstream_store_requests: {
+            drafting_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "DraftingHouseRules.pdf",
+              required_for_operations: ["draft", "evaluate", "rewrite"],
+              priority_rules: ["12", "13", "13A", "22", "23"],
+              structure_lock_policy: "not_required"
+            },
+            polish_rules_request: {
+              store_name: "VeritasStudioStore",
+              document_name: "PolishHouseRules.pdf",
+              required_for_operations: ["polish"],
+              priority_rules: [],
+              structure_lock_policy: "required"
+            }
+          },
+          missing_required_inputs: [],
+          blocked_reasons: [],
+          next_node: "N4A_Upstream_Draft_Gate"
+        }
+      };
+    }
+
+    // NODE 1
     const node1Result = await runNode(
       node1IntakeScopeLockCanonBasisAndStoreRouting,
       runner,
