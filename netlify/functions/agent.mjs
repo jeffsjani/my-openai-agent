@@ -6003,6 +6003,7 @@ export default async (req, context) => {
     }
 
     const sharedSecret = Netlify.env.get("AGENT_SHARED_SECRET");
+
     if (sharedSecret) {
       const providedSecret =
         req.headers.get("x-agent-secret") ||
@@ -6020,6 +6021,7 @@ export default async (req, context) => {
     }
 
     let body;
+
     try {
       body = await req.json();
     } catch {
@@ -6032,18 +6034,115 @@ export default async (req, context) => {
       );
     }
 
-    if (body?.ping === "test") {
+    /**
+     * FAST DEBUG BRANCH 1:
+     * Environment check. This does NOT expose the full API key.
+     * Use this from Postman with: { "debug_env": true }
+     */
+    if (body?.debug_env === true) {
+      const openaiApiKey =
+        process.env.OPENAI_API_KEY ||
+        Netlify.env.get("OPENAI_API_KEY") ||
+        null;
+
       return json({
         ok: true,
-        message: "agent endpoint reachable",
+        mode: "debug_env",
+        message: "Netlify function environment check",
+        has_openai_api_key: !!openaiApiKey,
+        openai_key_prefix: openaiApiKey
+          ? openaiApiKey.slice(0, 12)
+          : null,
+        has_agent_shared_secret: !!sharedSecret,
+        received_at: new Date().toISOString(),
+        received_keys: Object.keys(body || {})
       });
     }
 
+    /**
+     * FAST DEBUG BRANCH 2:
+     * Ping / reachability check. This must return BEFORE any OpenAI or Agent Runner call.
+     * Use this from Postman with: { "ping": true, "debug_ping": true }
+     */
+    if (
+      body?.ping === true ||
+      body?.debug_ping === true ||
+      body?.ping === "test" ||
+      body?.debug_return_before_agent === true ||
+      body?.debug_return_before_openai === true
+    ) {
+      return json({
+        ok: true,
+        mode: "ping",
+        message: "agent endpoint reachable before OpenAI / Agent Builder call",
+        received_at: new Date().toISOString(),
+        story_run_id: body?.story_run_id ?? null,
+        worker_mode: body?.worker_mode ?? null,
+        received_keys: Object.keys(body || {})
+      });
+    }
+
+    /**
+     * FAST DEBUG BRANCH 3:
+     * input_as_text ping compatibility.
+     */
     if (body?.input_as_text === "{\"ping\":\"test\"}") {
       return json({
         ok: true,
-        message: "agent endpoint reachable",
+        mode: "input_as_text_ping",
+        message: "agent endpoint reachable through input_as_text ping",
+        received_at: new Date().toISOString()
       });
+    }
+
+    /**
+     * FAST DEBUG BRANCH 4:
+     * Minimal OpenAI API test. Use this only after debug_env confirms the key is present.
+     * Use this from Postman with: { "debug_openai_minimal": true }
+     */
+    if (body?.debug_openai_minimal === true) {
+      const openaiApiKey =
+        process.env.OPENAI_API_KEY ||
+        Netlify.env.get("OPENAI_API_KEY") ||
+        null;
+
+      if (!openaiApiKey) {
+        return json(
+          {
+            ok: false,
+            mode: "debug_openai_minimal",
+            error: "OPENAI_API_KEY is missing from Netlify environment variables"
+          },
+          500
+        );
+      }
+
+      const startedAt = Date.now();
+
+      const r = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: "Return exactly: ok"
+        })
+      });
+
+      const text = await r.text();
+
+      return json(
+        {
+          ok: r.ok,
+          mode: "debug_openai_minimal",
+          status: r.status,
+          elapsed_ms: Date.now() - startedAt,
+          response_preview: text.slice(0, 1200)
+        },
+        r.status
+      );
     }
 
     if (
@@ -6051,13 +6150,6 @@ export default async (req, context) => {
       body.master_story_bible_text.trim().length > 0
     ) {
       console.log("[handler] master_story_bible_text received");
-    }
-
-    if (body?.debug_return_before_openai === true) {
-      return json({
-        ok: true,
-        message: "debug shortcut accepted",
-      });
     }
 
     const inputPayload =
