@@ -6110,10 +6110,16 @@ async function postCompletion(payload) {
 
   const startedAt = Date.now();
 
+  /**
+   * /story-run/complete now expects the request body to contain a top-level
+   * callback object. Do not post the raw payload directly.
+   */
   const response = await fetch(completeUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      callback: payload
+    })
   });
 
   const responseText = await response.text();
@@ -6131,6 +6137,7 @@ async function postCompletion(payload) {
 
 export default async (req, context) => {
   const invokedAt = new Date().toISOString();
+  let parsedBodyForFailure = {};
 
   try {
     if (req.method !== "POST") {
@@ -6155,6 +6162,7 @@ export default async (req, context) => {
 
     try {
       body = await req.json();
+      parsedBodyForFailure = body;
     } catch (error) {
       console.error("[agent-background] Invalid JSON body", error);
       await postCompletion({
@@ -6263,15 +6271,8 @@ export default async (req, context) => {
   } catch (error) {
     console.error("[agent-background] failed", error);
 
-    let bodyForFailure = {};
-    try {
-      bodyForFailure = await req.clone().json();
-    } catch {
-      bodyForFailure = {};
-    }
-
     const failurePayload = buildCompletionPayload({
-      body: bodyForFailure,
+      body: parsedBodyForFailure,
       result: null,
       error
     });
