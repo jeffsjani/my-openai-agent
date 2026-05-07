@@ -6117,6 +6117,7 @@ function buildCompletionPayload({ body, result, error }) {
             ? error.message
             : String(error ?? "Unknown Netlify background worker error"),
         error_type: "netlify_background_worker_error",
+        agent_background_version: AGENT_BACKGROUND_VERSION,
         completed_at: completedAt
       },
       final_chapter_text: null,
@@ -6156,6 +6157,10 @@ function buildCompletionPayload({ body, result, error }) {
               workflowResult?.error_message ??
               "Node 2 diagnostic did not return ready.";
 
+    const diagnosticText =
+      "DEBUG_STOP_AFTER_NODE2_RESULT:\n" +
+      JSON.stringify(workflowResult ?? {}, null, 2);
+
     return {
       ok: diagnosticOk,
       status: diagnosticStatus,
@@ -6166,11 +6171,12 @@ function buildCompletionPayload({ body, result, error }) {
         ...(workflowResult ?? {}),
         diagnostic_mode: "debug_stop_after_node2",
         diagnostic_final_text_required: false,
+        agent_background_version: AGENT_BACKGROUND_VERSION,
         workflow_result_text: workflowResultText
       },
       workflow_result_text: workflowResultText,
-      final_chapter_text: null,
-      final_combined_book_text: null,
+      final_chapter_text: diagnosticText,
+      final_combined_book_text: diagnosticText,
       error_message: diagnosticError
     };
   }
@@ -6207,15 +6213,22 @@ function buildCompletionPayload({ body, result, error }) {
 
   return {
     ok: workerOk,
+    agent_background_version: AGENT_BACKGROUND_VERSION,
     status: workerStatus,
     story_run_id: storyRunId,
     chapter_run_id: body?.chapter_run_id ?? null,
     completed_at: completedAt,
-    result_payload_json: workflowResult ?? {
-      ok: false,
+    result_payload_json: {
+      ...(workflowResult ?? {
+        ok: false,
       story_run_id: storyRunId,
       error: "Chapter Worker returned no parsed workflow result.",
-      workflow_result_text: workflowResultText
+        workflow_result_text: workflowResultText
+      }),
+      agent_background_version: AGENT_BACKGROUND_VERSION,
+      debug_body_keys: Object.keys(body || {}),
+      debug_body_debug_env: body?.debug_env ?? null,
+      debug_body_debug_stop_after_node2: body?.debug_stop_after_node2 ?? null
     },
     workflow_result_text: workflowResultText,
     final_chapter_text: finalChapterText,
@@ -6346,8 +6359,10 @@ export default async (req, context) => {
             !!getEnv("BUILDSHIP_STORY_RUN_COMPLETE_URL"),
           received_at: new Date().toISOString()
         },
-        final_chapter_text: null,
-        final_combined_book_text: null,
+        final_chapter_text:
+          "DEBUG_ENV_OK: agent-background endpoint received debug_env and successfully posted callback.",
+        final_combined_book_text:
+          "DEBUG_ENV_OK: agent-background endpoint received debug_env and successfully posted callback.",
         error_message: null
       });
       return;
@@ -6372,8 +6387,10 @@ export default async (req, context) => {
           worker_mode: body?.worker_mode ?? null,
           received_keys: Object.keys(body || {})
         },
-        final_chapter_text: null,
-        final_combined_book_text: null,
+        final_chapter_text:
+          "BACKGROUND_PING_OK: agent-background endpoint received ping/debug_ping and successfully posted callback.",
+        final_combined_book_text:
+          "BACKGROUND_PING_OK: agent-background endpoint received ping/debug_ping and successfully posted callback.",
         error_message: null
       });
       return;
