@@ -5806,6 +5806,37 @@ export async function runWorkflow(workflow) {
       return node3Result;
     }
 
+
+    if (parsedInput?.debug_stop_after_node2 === true) {
+      console.log("[workflow] debug_stop_after_node2 hit");
+
+      const node1Result = await runNode(
+        node1IntakeScopeLockCanonBasisAndStoreRouting,
+        runner,
+        conversationHistory,
+        "Node 1"
+      );
+
+      console.log("[Node 1] status", node1Result.output_parsed.status);
+
+      if (node1Result.output_parsed.status !== "ready") {
+        console.log("[workflow] debug_stop_after_node2 exiting after Node 1");
+        return node1Result;
+      }
+
+      const node2Result = await runNode(
+        node2UnitContractBuilder,
+        runner,
+        conversationHistory,
+        "Node 2"
+      );
+
+      console.log("[Node 2] status", node2Result.output_parsed.status);
+      console.log("[workflow] debug_stop_after_node2 exiting after Node 2");
+
+      return node2Result;
+    }
+
     // NODE 1
     // NODE 1
     const node1Result = await runNode(
