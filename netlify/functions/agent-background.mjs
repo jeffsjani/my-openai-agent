@@ -5,7 +5,7 @@ import { z } from "zod";
 
 // Tool definitions
 const fileSearch = fileSearchTool([
-  "vs_69d18c5f75d08191b4baa2e4e63be312"
+  "vs_69d18c7ac02881918e7c7b5b81c31e62"
 ])
 
 // Shared schema helpers
