@@ -724,6 +724,9 @@ Do not restate the input.
 Do not output malformed JSON.
 Every key must have a value.`,
   model: "gpt-5.4",
+  tools: [
+    fileSearch
+  ],
   outputType: Node2UnitContractBuilderSchema,
   modelSettings: {
     reasoning: {
