@@ -6122,15 +6122,90 @@ function buildCompletionPayload({ body, result, error }) {
     };
   }
 
+  /**
+   * Diagnostic mode:
+   * debug_stop_after_node2 intentionally returns a Node 2 packet,
+   * not final chapter prose. Therefore final_chapter_text is not required.
+   */
+  if (body?.debug_stop_after_node2 === true) {
+    const nodeStatus = workflowResult?.status ?? "failed";
+
+    const diagnosticOk = nodeStatus === "ready";
+
+    const diagnosticStatus =
+      nodeStatus === "ready"
+        ? "completed"
+        : nodeStatus === "needs_input"
+          ? "needs_input"
+          : "failed";
+
+    const diagnosticError =
+      diagnosticOk
+        ? null
+        : Array.isArray(workflowResult?.missing_required_inputs) &&
+          workflowResult.missing_required_inputs.length > 0
+          ? "Node 2 needs input: " +
+            workflowResult.missing_required_inputs.join("; ")
+          : Array.isArray(workflowResult?.blocked_reasons) &&
+            workflowResult.blocked_reasons.length > 0
+            ? "Node 2 blocked: " +
+              workflowResult.blocked_reasons.join("; ")
+            : workflowResult?.error ??
+              workflowResult?.error_message ??
+              "Node 2 diagnostic did not return ready.";
+
+    return {
+      ok: diagnosticOk,
+      status: diagnosticStatus,
+      story_run_id: storyRunId,
+      chapter_run_id: body?.chapter_run_id ?? null,
+      completed_at: completedAt,
+      result_payload_json: {
+        ...(workflowResult ?? {}),
+        diagnostic_mode: "debug_stop_after_node2",
+        diagnostic_final_text_required: false,
+        workflow_result_text: workflowResultText
+      },
+      workflow_result_text: workflowResultText,
+      final_chapter_text: null,
+      final_combined_book_text: null,
+      error_message: diagnosticError
+    };
+  }
+
   const workerOk =
     workflowResult &&
     typeof workflowResult === "object" &&
     workflowResult.status !== "blocked" &&
-    workflowResult.status !== "needs_input";
+    workflowResult.status !== "needs_input" &&
+    typeof finalChapterText === "string" &&
+    finalChapterText.trim().length > 0;
+
+  const workerStatus =
+    workerOk
+      ? "completed"
+      : workflowResult?.status === "needs_input"
+        ? "needs_input"
+        : "failed";
+
+  const errorMessage =
+    workerOk
+      ? null
+      : Array.isArray(workflowResult?.missing_required_inputs) &&
+        workflowResult.missing_required_inputs.length > 0
+        ? "Chapter Worker needs input: " +
+          workflowResult.missing_required_inputs.join("; ")
+        : Array.isArray(workflowResult?.blocked_reasons) &&
+          workflowResult.blocked_reasons.length > 0
+          ? "Chapter Worker blocked: " +
+            workflowResult.blocked_reasons.join("; ")
+          : workflowResult?.error ??
+            workflowResult?.error_message ??
+            "Chapter Worker did not return final chapter text";
 
   return {
     ok: workerOk,
-    status: workerOk ? "completed" : "failed",
+    status: workerStatus,
     story_run_id: storyRunId,
     chapter_run_id: body?.chapter_run_id ?? null,
     completed_at: completedAt,
@@ -6143,11 +6218,7 @@ function buildCompletionPayload({ body, result, error }) {
     workflow_result_text: workflowResultText,
     final_chapter_text: finalChapterText,
     final_combined_book_text: finalChapterText,
-    error_message: workerOk
-      ? null
-      : workflowResult?.blocked_reasons?.join("; ") ??
-        workflowResult?.error ??
-        "Chapter Worker did not complete successfully."
+    error_message: errorMessage
   };
 }
 
