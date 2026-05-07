@@ -3,6 +3,8 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
+const AGENT_VERSION = "agent-manifest-override-v2026-05-07-01";
+
 // Tool definitions
 const fileSearch = fileSearchTool([
   "vs_69d18c5f75d08191b4baa2e4e63be312"
@@ -156,6 +158,20 @@ Use this authority order:
 - Exclude STORY PIPELINE V2.pdf entirely from source logic and routing.
 - DraftingHouseRules.pdf and PolishHouseRules.pdf are downstream vector-store dependencies. Do not require them as attached files in the payload.
 - Return needs_input only if both inline master_story_bible_text is unavailable/inadequate and File Search cannot retrieve the requested Section 12 unit or required active-stack sections.
+
+
+9A. Structured chapter manifest and unit-contract override
+If the incoming payload contains unit_contract_override, chapter_manifest_entry, selected_chapter_manifest, project_chapter_manifest_row, or a chapter_manifest_json entry for the requested chapter, treat that structured contract as an authoritative Section 12 routing source for the selected unit.
+
+In that case:
+- use unit_contract_override.unit_label as the preferred exact target unit label
+- use the selected chapter number and selected chapter title from the manifest when present
+- do not return needs_input at Node 1 because Section 12 was not retrieved by File Search
+- set canon_basis = "master_story_bible"
+- set status = "ready" when all Node 1 routing requirements are otherwise satisfied
+- route to Node 2 for active-stack packet building
+
+The structured chapter manifest is derived from the Master Story Bible Section 12 and is more deterministic than runtime File Search for exact chapter numbering.
 
 10. Active pipeline stack — default every time
 Always emit this exact active_bible_sections list in this exact order:
@@ -454,7 +470,9 @@ That means it must normalize all of the following:
 6A. File Search extraction rule
 Use File Search to extract the full active drafting-stack packet set from the Master Story Bible when inline master_story_bible_text is absent, incomplete, or does not contain the requested unit.
 
-Retrieve Section 12 first and identify the exact unit card matching the requested chapter number or unit label. Preserve the exact titled unit label from Section 12.
+If unit_contract_override is present, use it as the Section 12 unit card and skip Section 12 rediscovery for the requested chapter.
+
+If unit_contract_override is absent, retrieve Section 12 first and identify the exact unit card matching the requested chapter number or unit label. Preserve the exact titled unit label from Section 12.
 
 Then retrieve and normalize the required active stack sections:
 12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4.
@@ -462,6 +480,21 @@ Then retrieve and normalize the required active stack sections:
 Do not return needs_input solely because the payload does not contain master_story_bible_text. File Search is an authorized Master Story Bible source.
 
 Return needs_input only if File Search cannot find the requested Section 12 unit or cannot retrieve required active-stack sections with enough specificity to populate the schema.
+
+
+6B. Structured chapter manifest and unit-contract override
+If the incoming payload contains unit_contract_override, chapter_manifest_entry, selected_chapter_manifest, project_chapter_manifest_row, or a matching chapter_manifest_json entry, treat that structured contract as the controlling Section 12 unit contract for the requested chapter.
+
+When a usable unit_contract_override is present:
+- do not use File Search to rediscover, rename, or override that unit contract
+- do not return needs_input because the exact Section 12 unit card cannot be retrieved from File Search
+- populate unit_contracts as an array containing exactly the normalized unit_contract_override
+- preserve unit_contract_override.unit_label as the exact unit label
+- align target_units_requested to that unit_label when the upstream target is only a generic label such as "Chapter N"
+- treat the override as Master Story Bible Section 12 canon for objective, conflict, reversal, reveal, carry_forward, ending_hook, target_word_count, POV, setting, and drafting_beats
+- use File Search only to retrieve and normalize the remaining active-stack sections: 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, and 4
+
+Return needs_input for the Section 12 unit contract only if the structured override is absent or is missing essential canon fields such as unit_label plus all of objective, conflict, reversal, reveal, carry_forward, ending_hook, and drafting_beats.
 
 7. Active stack defaults
 Always return:
@@ -494,7 +527,9 @@ Extract and normalize:
 - style_shorthand
 
 10. Build unit_contracts from Section 12
-For each target unit requested:
+If unit_contract_override is present, populate unit_contracts from that override first and preserve it exactly as the controlling Section 12 unit contract.
+
+If unit_contract_override is absent, then for each target unit requested:
 - find the exact unit card in Section 12
 - preserve the exact titled unit label
 - extract:
@@ -653,7 +688,7 @@ Return status = \"needs_input\" when, after using both inline text if available 
   - 21
   - 18
   - 4
-- any requested target unit cannot be found in Section 12
+- any requested target unit cannot be found in Section 12 and no usable unit_contract_override is present
 - required downstream store routing information is truly absent
 
 Do not return needs_input merely because master_story_bible_text is absent from the payload. If File Search is available, use File Search to retrieve the Master Story Bible first.
@@ -3344,6 +3379,187 @@ function safeCycleCount(value, fallback = 1) {
   return n;
 }
 
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function parseMaybeJson(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function normalizeDraftingBeats(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item ?? "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    const parsed = parseMaybeJson(trimmed);
+    if (Array.isArray(parsed)) return normalizeDraftingBeats(parsed);
+
+    return trimmed
+      .split(/\n+|\r+|\u2022|- /g)
+      .map((item) => item.replace(/^\d+[.)]\s*/, "").trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function findManifestRowInCollection(collection, parsedInput) {
+  if (!collection) return null;
+
+  const selectedNumber = Number(
+    parsedInput?.selected_chapter_number ??
+    parsedInput?.chapter_number ??
+    parsedInput?.chapter_context?.chapter_number
+  );
+
+  const selectedUnitLabel = firstNonEmpty(
+    parsedInput?.selected_unit_label,
+    parsedInput?.unit_label,
+    parsedInput?.chapter_context?.unit_label
+  );
+
+  const selectedTitle = firstNonEmpty(
+    parsedInput?.selected_chapter_title,
+    parsedInput?.chapter_title,
+    parsedInput?.chapter_context?.chapter_title
+  );
+
+  let rows = null;
+
+  if (Array.isArray(collection)) {
+    rows = collection;
+  } else if (Array.isArray(collection?.chapters)) {
+    rows = collection.chapters;
+  } else if (Array.isArray(collection?.chapter_manifest)) {
+    rows = collection.chapter_manifest;
+  } else if (Array.isArray(collection?.rows)) {
+    rows = collection.rows;
+  } else if (typeof collection === "object") {
+    rows = Object.values(collection).filter((value) => value && typeof value === "object");
+  }
+
+  if (!Array.isArray(rows)) return null;
+
+  return rows.find((row) => {
+    const rowNumber = Number(row?.chapter_number ?? row?.selected_chapter_number ?? row?.number);
+    const rowUnitLabel = firstNonEmpty(row?.unit_label, row?.selected_unit_label, row?.chapter_label);
+    const rowTitle = firstNonEmpty(row?.chapter_title, row?.selected_chapter_title, row?.title);
+
+    if (Number.isFinite(selectedNumber) && Number.isFinite(rowNumber) && rowNumber === selectedNumber) return true;
+    if (selectedUnitLabel && rowUnitLabel && rowUnitLabel === selectedUnitLabel) return true;
+    if (selectedTitle && rowTitle && rowTitle === selectedTitle) return true;
+    return false;
+  }) ?? null;
+}
+
+function normalizeUnitContractOverride(parsedInput) {
+  const direct =
+    parsedInput?.unit_contract_override ??
+    parsedInput?.unit_contract ??
+    parsedInput?.chapter_unit_contract ??
+    parsedInput?.selected_unit_contract ??
+    null;
+
+  const manifestRow =
+    direct ??
+    parsedInput?.chapter_manifest_entry ??
+    parsedInput?.chapterManifestEntry ??
+    parsedInput?.selected_chapter_manifest ??
+    parsedInput?.selectedChapterManifest ??
+    parsedInput?.project_chapter_manifest_row ??
+    parsedInput?.projectChapterManifestRow ??
+    findManifestRowInCollection(parseMaybeJson(parsedInput?.chapter_manifest_json), parsedInput) ??
+    findManifestRowInCollection(parsedInput?.chapter_manifest, parsedInput) ??
+    findManifestRowInCollection(parsedInput?.project_chapter_manifest, parsedInput) ??
+    null;
+
+  if (!manifestRow || typeof manifestRow !== "object") return null;
+
+  const chapterNumber = firstNonEmpty(
+    manifestRow.chapter_number,
+    manifestRow.selected_chapter_number,
+    parsedInput?.selected_chapter_number,
+    parsedInput?.chapter_context?.chapter_number
+  );
+
+  const chapterTitle = firstNonEmpty(
+    manifestRow.chapter_title,
+    manifestRow.selected_chapter_title,
+    manifestRow.title,
+    parsedInput?.selected_chapter_title,
+    parsedInput?.chapter_context?.chapter_title
+  );
+
+  const unitLabel = firstNonEmpty(
+    manifestRow.unit_label,
+    manifestRow.selected_unit_label,
+    manifestRow.chapter_label,
+    parsedInput?.selected_unit_label,
+    parsedInput?.chapter_context?.unit_label,
+    chapterNumber && chapterTitle ? `Chapter ${chapterNumber} - ${chapterTitle}` : null,
+    chapterNumber ? `Chapter ${chapterNumber}` : null
+  );
+
+  const normalized = {
+    source_section_number: Number(manifestRow.source_section_number ?? 12),
+    movement_label: String(firstNonEmpty(manifestRow.movement_label, manifestRow.movement, manifestRow.act_label, "") ?? ""),
+    movement_approximate_length: firstNonEmpty(manifestRow.movement_approximate_length, manifestRow.movement_length, manifestRow.approximate_length),
+    unit_label: String(unitLabel ?? ""),
+    target_word_count: firstNonEmpty(manifestRow.target_word_count, manifestRow.word_count, manifestRow.target_words),
+    pov: String(firstNonEmpty(manifestRow.pov, manifestRow.point_of_view, "") ?? ""),
+    setting: String(firstNonEmpty(manifestRow.setting, manifestRow.location, "") ?? ""),
+    objective: String(firstNonEmpty(manifestRow.objective, manifestRow.chapter_objective, manifestRow.scene_objective, "") ?? ""),
+    conflict: String(firstNonEmpty(manifestRow.conflict, manifestRow.chapter_conflict, "") ?? ""),
+    reversal: String(firstNonEmpty(manifestRow.reversal, manifestRow.turn, manifestRow.chapter_reversal, "") ?? ""),
+    reveal: String(firstNonEmpty(manifestRow.reveal, manifestRow.revelation, manifestRow.chapter_reveal, "") ?? ""),
+    carry_forward: String(firstNonEmpty(manifestRow.carry_forward, manifestRow.carryforward, manifestRow.carry_forward_summary, "") ?? ""),
+    ending_hook: String(firstNonEmpty(manifestRow.ending_hook, manifestRow.hook, manifestRow.chapter_ending_hook, "") ?? ""),
+    drafting_beats: normalizeDraftingBeats(
+      manifestRow.drafting_beats ??
+      manifestRow.beats ??
+      manifestRow.chapter_beats ??
+      manifestRow.draft_beats
+    )
+  };
+
+  const hasMinimumContract =
+    normalized.unit_label &&
+    (
+      normalized.objective ||
+      normalized.conflict ||
+      normalized.reversal ||
+      normalized.reveal ||
+      normalized.carry_forward ||
+      normalized.ending_hook ||
+      normalized.drafting_beats.length > 0
+    );
+
+  return hasMinimumContract ? normalized : null;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
@@ -3405,6 +3621,25 @@ export async function runWorkflow(workflow) {
     } catch {
       parsedInput = {};
       console.log("[workflow] parsedInput JSON parse failed, using {}");
+    }
+
+    const normalizedUnitContractOverride = normalizeUnitContractOverride(parsedInput);
+    if (normalizedUnitContractOverride) {
+      parsedInput.unit_contract_override = normalizedUnitContractOverride;
+      parsedInput.selected_unit_label = parsedInput.selected_unit_label ?? normalizedUnitContractOverride.unit_label;
+      parsedInput.current_unit_label = parsedInput.current_unit_label ?? normalizedUnitContractOverride.unit_label;
+      parsedInput.chapter_context = parsedInput.chapter_context && typeof parsedInput.chapter_context === "object"
+        ? parsedInput.chapter_context
+        : {
+            chapter_number: parsedInput?.selected_chapter_number ?? parsedInput?.chapter_number ?? null,
+            chapter_title: parsedInput?.selected_chapter_title ?? null,
+            unit_label: normalizedUnitContractOverride.unit_label,
+            prior_chapter_summary: null,
+            prior_chapter_end_snippet: null,
+            prior_chapter_ending_condition: null
+          };
+      parsedInput.chapter_context.unit_label = parsedInput.chapter_context.unit_label ?? normalizedUnitContractOverride.unit_label;
+      console.log("[workflow] unit_contract_override detected", normalizedUnitContractOverride.unit_label);
     }
 
     // TEMP DEBUG SUPPORT:
