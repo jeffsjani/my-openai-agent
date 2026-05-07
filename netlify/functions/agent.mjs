@@ -141,11 +141,18 @@ Use this authority order:
 - approved_upstream_text
 - target_text_only only when nothing stronger exists
 
-9. Source logic
-- Treat the Master Story Bible as the primary canon source when present.
+9. Source logic and File Search retrieval
+- Treat the Master Story Bible as the primary canon source for chapter drafting.
+- If master_story_bible_text is present in the incoming payload, use it as an inline Master Story Bible source.
+- If master_story_bible_text is absent, empty, or too short to contain the requested chapter/unit, use File Search as the authorized Master Story Bible source.
+- File Search is connected to the active OpenAI vector store for project knowledge and must be used to retrieve Master Story Bible content when inline text is unavailable.
+- Do not mark the Master Story Bible as missing merely because it is not present as inline text. Attempt File Search retrieval first.
+- For drafting entry, retrieve Section 12 — Chapter-by-Chapter Breakdown first.
+- If the request identifies only a chapter number, use Section 12 to resolve the exact titled unit label for that chapter before proceeding.
+- After Section 12 is resolved, retrieve or preserve the active drafting-stack sections as needed: 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, and 4.
 - Exclude STORY PIPELINE V2.pdf entirely from source logic and routing.
-- Do not require DraftingHouseRules.pdf or PolishHouseRules.pdf as attached files.
-- These rule documents are downstream vector-store dependencies only.
+- DraftingHouseRules.pdf and PolishHouseRules.pdf are downstream vector-store dependencies. Do not require them as attached files in the payload.
+- Return needs_input only if both inline master_story_bible_text is unavailable/inadequate and File Search cannot retrieve the requested Section 12 unit or required active-stack sections.
 
 10. Active pipeline stack — default every time
 Always emit this exact active_bible_sections list in this exact order:
@@ -249,7 +256,11 @@ For polish_rules_request always return:
 - structure_lock_policy = \"required\"
 
 13. Missing input rule
-If canon-dependent work is requested and the Master Story Bible is not available, return status = \"needs_input\".
+If canon-dependent work is requested, return status = \"needs_input\" only when both of the following are true:
+- no usable inline master_story_bible_text is present in the incoming payload
+- File Search cannot retrieve the Master Story Bible Section 12 unit or required active-stack sections from the vector store
+
+Do not return needs_input merely because master_story_bible_text is absent from the payload. File Search retrieval is an authorized Master Story Bible source.
 
 14. Block rule
 Return status = \"blocked\" when:
@@ -408,12 +419,15 @@ run_config may contain:
 Do not overwrite these values.
 Do not invent them.
 
-5. Canon authority
+5. Canon authority and File Search authority
 Use this authority order:
 - user canon override if present upstream
-- Master Story Bible
+- Master Story Bible from inline master_story_bible_text when present and adequate
+- Master Story Bible retrieved through File Search from the active vector store when inline text is absent or incomplete
 - approved_upstream_text
 - target_text_only only when no stronger canon exists
+
+File Search is an authorized Master Story Bible source for this node. Do not treat the Bible as unavailable until File Search has been used to retrieve Section 12 and the active-stack sections.
 
 6. Active stack requirement
 This node must build every packet in the active stack.
@@ -430,6 +444,18 @@ That means it must normalize all of the following:
 - signature_verbal_deployment_packet from Section 21
 - research_authenticity_packet from Section 18
 - prestige_quality_alignment_packet from Section 4
+
+6A. File Search extraction rule
+Use File Search to extract the full active drafting-stack packet set from the Master Story Bible when inline master_story_bible_text is absent, incomplete, or does not contain the requested unit.
+
+Retrieve Section 12 first and identify the exact unit card matching the requested chapter number or unit label. Preserve the exact titled unit label from Section 12.
+
+Then retrieve and normalize the required active stack sections:
+12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4.
+
+Do not return needs_input solely because the payload does not contain master_story_bible_text. File Search is an authorized Master Story Bible source.
+
+Return needs_input only if File Search cannot find the requested Section 12 unit or cannot retrieve required active-stack sections with enough specificity to populate the schema.
 
 7. Active stack defaults
 Always return:
@@ -606,8 +632,8 @@ Return status = \"ready\" only when:
 - downstream_store_requests is present or can be semantically rebuilt
 - no required input is missing
 
-Return status = \"needs_input\" when:
-- the Master Story Bible is not available
+Return status = \"needs_input\" when, after using both inline text if available and File Search retrieval when needed:
+- the Master Story Bible still cannot be accessed with enough specificity
 - any required active-stack section cannot be found:
   - 12
   - 3
@@ -623,6 +649,8 @@ Return status = \"needs_input\" when:
   - 4
 - any requested target unit cannot be found in Section 12
 - required downstream store routing information is truly absent
+
+Do not return needs_input merely because master_story_bible_text is absent from the payload. If File Search is available, use File Search to retrieve the Master Story Bible first.
 
 Return status = \"blocked\" only when:
 - requested_operation is not \"draft\"
