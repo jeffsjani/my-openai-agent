@@ -148,8 +148,11 @@ Use this authority order:
 - File Search is connected to the active OpenAI vector store for project knowledge and must be used to retrieve Master Story Bible content when inline text is unavailable.
 - Do not mark the Master Story Bible as missing merely because it is not present as inline text. Attempt File Search retrieval first.
 - For drafting entry, retrieve Section 12 — Chapter-by-Chapter Breakdown first.
-- If the request identifies only a chapter number, use Section 12 to resolve the exact titled unit label for that chapter before proceeding.
-- After Section 12 is resolved, retrieve or preserve the active drafting-stack sections as needed: 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, and 4.
+- If the request identifies only a chapter number, attempt to use Section 12 to resolve the exact titled unit label for that chapter.
+- If File Search cannot confidently resolve the exact titled unit label at Node 1, do not return needs_input solely for that reason when a chapter number is present. Use the generic label "Chapter N" as a provisional target_units_requested value and route to Node 2.
+- In that fallback case, set resolved_scope to "single_chapter: Chapter N", set canon_basis to "master_story_bible", set status to "ready", set next_node to "N2_Unit_Contract_Builder", and leave missing_required_inputs empty.
+- Node 2 is responsible for deeper Section 12 extraction and exact unit-card matching. Node 2 may return needs_input if it cannot retrieve a matching Section 12 unit card using the chapter number, provisional generic label, project title, and File Search.
+- After Section 12 is resolved or provisionally routed by chapter number, retrieve or preserve the active drafting-stack sections as needed: 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, and 4.
 - Exclude STORY PIPELINE V2.pdf entirely from source logic and routing.
 - DraftingHouseRules.pdf and PolishHouseRules.pdf are downstream vector-store dependencies. Do not require them as attached files in the payload.
 - Return needs_input only if both inline master_story_bible_text is unavailable/inadequate and File Search cannot retrieve the requested Section 12 unit or required active-stack sections.
@@ -256,25 +259,28 @@ For polish_rules_request always return:
 - structure_lock_policy = \"required\"
 
 13. Missing input rule
-If canon-dependent work is requested, return status = \"needs_input\" only when both of the following are true:
+If canon-dependent work is requested, return status = \"needs_input\" only when all of the following are true:
 - no usable inline master_story_bible_text is present in the incoming payload
-- File Search cannot retrieve the Master Story Bible Section 12 unit or required active-stack sections from the vector store
+- File Search cannot retrieve enough Master Story Bible context to establish that the project Bible exists in the vector store
+- no chapter number, explicit unit label, or provisional generic \"Chapter N\" route can be established from the incoming payload
 
-Do not return needs_input merely because master_story_bible_text is absent from the payload. File Search retrieval is an authorized Master Story Bible source.
+Do not return needs_input merely because master_story_bible_text is absent from the payload. File Search retrieval is an authorized Master Story Bible source. Do not return needs_input merely because the exact titled unit label is unresolved at Node 1 when a chapter number is available.
 
 14. Block rule
 Return status = \"blocked\" when:
 - requested_operation is not \"draft\"
 
 15. Ready rule
-Return status = \"ready\" only when:
+Return status = \"ready\" when:
 - requested_operation = \"draft\"
-- exact target units are resolved
-- canon_basis is resolved
+- either an exact target unit label is resolved OR a requested chapter number is present and can be represented as the provisional label \"Chapter N\"
+- canon_basis is resolved as \"master_story_bible\" when drafting from the Bible/vector store
 - active_bible_sections = [12,3,15,19,7,11,13,8,9,21,18,4]
 - drafting_bible_stack is present and correctly ordered
 - downstream_store_requests contains both drafting_rules_request and polish_rules_request
-- no required input is missing
+- no required input is missing at the Node 1 intake/routing level
+
+Do not require exact titled unit-label resolution in Node 1 if a chapter number is present. Exact titled unit-label and unit-card resolution belongs to Node 2.
 
 16. Field completion rules
 - If status = \"ready\", set next_node = \"N2_Unit_Contract_Builder\"
