@@ -3,6 +3,8 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
+const AGENT_BACKGROUND_VERSION = "agent-background-node2-diagnostic-v2026-05-07-02";
+
 // Tool definitions
 const fileSearch = fileSearchTool([
   "vs_69d18c7ac02881918e7c7b5b81c31e62"
@@ -6335,6 +6337,7 @@ export default async (req, context) => {
         result_payload_json: {
           ok: true,
           mode: "debug_env",
+          agent_background_version: AGENT_BACKGROUND_VERSION,
           has_openai_api_key: !!openaiApiKey,
           openai_key_prefix: openaiApiKey ? openaiApiKey.slice(0, 12) : null,
           has_agent_shared_secret: !!sharedSecret,
@@ -6363,6 +6366,7 @@ export default async (req, context) => {
         result_payload_json: {
           ok: true,
           mode: "background_ping",
+          agent_background_version: AGENT_BACKGROUND_VERSION,
           message: "agent-background endpoint received job and callback path works",
           received_at: new Date().toISOString(),
           worker_mode: body?.worker_mode ?? null,
