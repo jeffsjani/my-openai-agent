@@ -3,7 +3,7 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
-const AGENT_BACKGROUND_VERSION = "agent-background-manifest-override-v2026-05-07-01";
+const AGENT_BACKGROUND_VERSION = "agent-background-manifest-node2-fallback-v2026-05-09-01";
 
 // Tool definitions
 const fileSearch = fileSearchTool([
@@ -3560,6 +3560,585 @@ function normalizeUnitContractOverride(parsedInput) {
   return hasMinimumContract ? normalized : null;
 }
 
+
+
+// -----------------------------------------------------------------------------
+// Manifest diagnostic fallback helpers
+// Version: manifest-node2-active-stack-fallback-v2026-05-09-01
+// Purpose:
+// - When a structured Section 12 unit_contract_override is present, preserve it
+//   as the controlling unit contract.
+// - If the real Node 2 agent cannot retrieve the remaining active Bible packets
+//   through File Search during the controlled manifest test, synthesize safe,
+//   conservative active-stack packet placeholders so orchestration can proceed.
+// - These fallback packets are intentionally labeled and should be replaced later
+//   by structured projectBiblePacketsLive / active_stack_override data.
+// -----------------------------------------------------------------------------
+
+const MANIFEST_NODE2_FALLBACK_VERSION = "manifest-node2-active-stack-fallback-v2026-05-09-01";
+
+function buildActiveEveryTimeStack() {
+  return [
+    {
+      section_number: 12,
+      section_name: "Chapter-by-Chapter Breakdown",
+      packet_name: "unit_contracts",
+      drafting_role: "Controls objective, conflict, reversal, reveal, carry-forward, ending hook, drafting beats, and scene mission."
+    },
+    {
+      section_number: 3,
+      section_name: "Writing Style & Narrative Voice",
+      packet_name: "style_packet",
+      drafting_role: "Controls prose texture, propulsion, rhythm, descriptive priority, suspense logic, atmosphere, and emotional handling."
+    },
+    {
+      section_number: 15,
+      section_name: "Dialogue & Voice Cheat Sheet",
+      packet_name: "dialogue_voice_packet",
+      drafting_role: "Controls dialogue differentiation, subtext, interruption, silence, flirtation, institutional speech, and voice discipline."
+    },
+    {
+      section_number: 19,
+      section_name: "Locked Draft Priorities",
+      packet_name: "locked_draft_priorities_packet",
+      drafting_role: "Controls nonnegotiable priorities, do-not-change items, lock points, and veto constraints."
+    },
+    {
+      section_number: 7,
+      section_name: "Cast / Character Constellation",
+      packet_name: "character_constellation_packet",
+      drafting_role: "Controls relationship geometry, social vectors, attraction-conflict axes, trust fault lines, and who matters in the room."
+    },
+    {
+      section_number: 11,
+      section_name: "Structural Spine",
+      packet_name: "structural_spine_packet",
+      drafting_role: "Supports sequence placement, escalation logic, handoff force, and setup/payoff tracking."
+    },
+    {
+      section_number: 13,
+      section_name: "Set-Pieces & Symbol Architecture",
+      packet_name: "setpiece_symbol_architecture_packet",
+      drafting_role: "Controls set-piece intent, symbolic object deployment, visual escalation, and scene architecture pressure."
+    },
+    {
+      section_number: 8,
+      section_name: "World, Setting & Cinematic Palette",
+      packet_name: "world_setting_palette_packet",
+      drafting_role: "Supports setting texture, city palette, environmental pressure, and institutional surface cues."
+    },
+    {
+      section_number: 9,
+      section_name: "Thematic Spine & Moral Architecture",
+      packet_name: "thematic_moral_architecture_packet",
+      drafting_role: "Controls thematic pressure, moral contradictions, private/public cost lines, and meaning under action."
+    },
+    {
+      section_number: 21,
+      section_name: "Signature Verbal Identity and Franchise Deployment",
+      packet_name: "signature_verbal_deployment_packet",
+      drafting_role: "Sharpens signature language, recurring phrase motifs, and franchise verbal deployment."
+    },
+    {
+      section_number: 18,
+      section_name: "Research & Authenticity Bible",
+      packet_name: "research_authenticity_packet",
+      drafting_role: "Controls procedural truth, terminology discipline, realism boundaries, and authenticity anchors."
+    },
+    {
+      section_number: 4,
+      section_name: "Prestige Quality Alignment",
+      packet_name: "prestige_quality_alignment_packet",
+      drafting_role: "Supports prestige calibration, anti-generic control, audience promise, and publish-ready quality pressure."
+    }
+  ];
+}
+
+function buildDefaultDownstreamStoreRequests() {
+  return {
+    drafting_rules_request: {
+      store_name: "VeritasStudioStore",
+      document_name: "DraftingHouseRules.pdf",
+      required_for_operations: ["draft", "evaluate", "rewrite"],
+      priority_rules: ["12", "13", "13A", "22", "23"],
+      structure_lock_policy: "not_required"
+    },
+    polish_rules_request: {
+      store_name: "VeritasStudioStore",
+      document_name: "PolishHouseRules.pdf",
+      required_for_operations: ["polish"],
+      priority_rules: [],
+      structure_lock_policy: "required"
+    }
+  };
+}
+
+function buildFallbackStylePacket(unitContract) {
+  return {
+    source_section_number: 3,
+    narrative_mandate: "fallback_packet_from_manifest_diagnostic: Write in a controlled prestige-commercial thriller mode using concrete action, legible pressure, and emotionally alive restraint.",
+    prose_texture: "Concrete, cinematic, pressure-bearing, and readable; avoid generic abstraction and decorative excess.",
+    opening_propulsion: "Begin under changed pressure rather than explanation.",
+    narrative_rhythm: "Use clean propulsion, varied paragraph length, and escalating cause-and-effect beats.",
+    descriptive_priority: "Prioritize bodies, objects, weather, rooms, evidence, travel surfaces, and procedural action before interpretation.",
+    object_engine_rule: "Let important objects and evidence carry leverage through action rather than exposition.",
+    emotional_handling: "Keep emotion inside motion, choice, silence, friction, and precise physical behavior.",
+    pleasure_rule: "Allow relational charge and scene pleasure without breaking suspense, plausibility, or canon.",
+    emotion_inside_motion: "Reveal feeling through work, interruption, restraint, and consequence.",
+    suspense_rule: "Every beat should change what can be proven, trusted, concealed, or lost.",
+    political_handling: "Keep institutions, provenance, and public/private consequences plausible and specific.",
+    action_handling: "Use route, object, evidence, procedure, and physical consequence rather than vague motion.",
+    dialogue_relation: "Dialogue should be pressure-bearing, differentiated, indirect, and legible.",
+    pov_discipline: `Stay inside the requested POV when provided: ${unitContract?.pov || "requested POV"}.`,
+    atmosphere_rule: `Use the chapter setting as pressure, not decoration: ${unitContract?.setting || "the stated setting"}.`,
+    ending_rule: "End on the changed condition required by the unit contract.",
+    suspense_sequence_pass_criteria: [
+      "The objective, conflict, and ending hook remain visible through action.",
+      "Every scene beat materially changes proof, trust, risk, or relationship pressure.",
+      "The chapter can be followed by a reader without outside explanation."
+    ],
+    suspense_sequence_failure_signs: [
+      "The prose becomes abstract before the physical situation is clear.",
+      "The chapter states feelings without dramatizing pressure.",
+      "Evidence, procedure, or relationship consequence becomes vague."
+    ],
+    forbidden_style_failures: [
+      "Inventing new canon beyond the unit contract.",
+      "Generic thriller cool without character cost.",
+      "Over-polished dialogue that erases subtext or voice.",
+      "Expository summary replacing dramatized beats."
+    ],
+    style_shorthand: "fallback_packet_from_manifest_diagnostic: concrete prestige thriller, emotion inside motion, evidence before interpretation."
+  };
+}
+
+function buildFallbackDialogueVoicePacket() {
+  return {
+    source_section_number: 15,
+    dialogue_mandate: "fallback_packet_from_manifest_diagnostic: Dialogue must carry pressure, concealment, status, and relationship truth without becoming blunt exposition.",
+    voice_differentiation_rules: [
+      "Give each major speaker a distinct rhythm, level of control, and defensive strategy.",
+      "Let professional competence shape word choice without turning speech into jargon.",
+      "Keep banter subordinate to pressure and consequence."
+    ],
+    subtext_rules: [
+      "Characters should speak toward what they want, fear, defend, or conceal.",
+      "Avoid fully explaining the emotional meaning of a line when behavior can carry it.",
+      "Let work-talk carry attraction, mistrust, shame, respect, or rivalry when appropriate."
+    ],
+    compression_rules: [
+      "Prefer short, specific exchanges over speeches.",
+      "Cut repeated information once the reader understands the pressure.",
+      "Use partial answers when pressure makes full honesty implausible."
+    ],
+    interruption_and_silence_rules: [
+      "Use interruption when power, urgency, or embarrassment would interrupt.",
+      "Use silence as a consequence, not as a vague literary effect.",
+      "Let action interrupt dialogue when evidence or danger demands it."
+    ],
+    flirtation_and_desire_rules: [
+      "If attraction is present, keep it adult, constrained, and embedded in risk.",
+      "Desire should complicate judgment rather than pause the plot.",
+      "Respect can land harder than overt confession."
+    ],
+    institutional_speech_rules: [
+      "Institutional language should sound useful, guarded, and consequential.",
+      "Avoid fake authority jargon.",
+      "Procedural statements should reveal risk and accountability."
+    ],
+    voice_forbidden_failures: [
+      "Same-voice drift.",
+      "Pseudo-profound one-liners.",
+      "Dialogue that answers every question too neatly.",
+      "Characters naming feelings the scene can dramatize."
+    ],
+    dialogue_voice_shorthand: "fallback_packet_from_manifest_diagnostic: pressure, subtext, differentiation, consequence."
+  };
+}
+
+function buildFallbackLockedDraftPrioritiesPacket(unitContract) {
+  return {
+    source_section_number: 19,
+    locked_draft_mandate: "fallback_packet_from_manifest_diagnostic: Treat the supplied unit contract as the nonnegotiable chapter mission.",
+    nonnegotiable_priorities: [
+      `Preserve objective: ${unitContract?.objective || "the stated objective"}.`,
+      `Preserve conflict: ${unitContract?.conflict || "the stated conflict"}.`,
+      `Preserve ending hook: ${unitContract?.ending_hook || "the stated ending hook"}.`,
+      "Do not invent new major plot branches, named players, or evidence not implied by the contract."
+    ],
+    do_not_change: [
+      "Do not change the selected chapter number, title, unit label, POV, or setting.",
+      "Do not replace the unit contract with File Search guesses.",
+      "Do not remove the carry-forward logic."
+    ],
+    escalation_priorities: [
+      "Move from aftermath or setup into a sharper proof, trust, or relationship consequence.",
+      "Escalate through choices and evidence, not through abstract commentary."
+    ],
+    relationship_lock_points: [
+      "Preserve the relationship pressure stated or implied by the unit contract.",
+      "Let respect, embarrassment, attraction, rivalry, or mistrust land through action."
+    ],
+    object_and_motif_lock_points: [
+      "Preserve any object, token, evidence, notation, document, or proof mechanism named in the unit contract.",
+      "Objects should have procedural and emotional consequence."
+    ],
+    ending_and_payoff_lock_points: [
+      `End in the condition required by the unit contract: ${unitContract?.ending_hook || "the stated ending hook"}.`,
+      "The ending must create forward pressure for the next unit."
+    ],
+    locked_priorities_shorthand: "fallback_packet_from_manifest_diagnostic: contract fidelity, no invented canon, forward-pressure ending."
+  };
+}
+
+function buildFallbackCharacterConstellationPacket(unitContract) {
+  const povName = unitContract?.pov || "POV character";
+  return {
+    source_section_number: 7,
+    constellation_mandate: "fallback_packet_from_manifest_diagnostic: Center the people and relationship pressures named or implied by the unit contract.",
+    central_pairing: "Liv Nilsen and Eirik Sande",
+    major_characters: [
+      {
+        name: "Eirik Sande",
+        role: "Historian / investigator under reputational and moral pressure",
+        function: "POV or central pressure carrier when specified; embodies old hunger for singular control and the cost of credibility.",
+        relation_to_pov: povName === "Eirik Sande" || povName === "Eirik" ? "self" : "central counterpart"
+      },
+      {
+        name: "Liv Nilsen",
+        role: "Evidence-minded counterpart and chain-of-custody conscience",
+        function: "Forces proof, process, and survivable public truth against private instinct.",
+        relation_to_pov: povName === "Liv Nilsen" || povName === "Liv" ? "self" : "pressure counterpart"
+      }
+    ],
+    relationship_pressure_lines: [
+      "They are more effective together than apart.",
+      "Their competence increases the danger of mutual compromise.",
+      "Respect can land harder than forgiveness or confession."
+    ],
+    attraction_conflict_axes: [
+      "Work-talk carries attraction and unresolved charge.",
+      "Trust grows through procedural concession rather than softness.",
+      "Each recognizes the other’s most dangerous instinct."
+    ],
+    trust_fault_lines: [
+      "Eirik's old hunger for control threatens proof and credibility.",
+      "Liv's insistence on process cuts against private emotional momentum.",
+      "The relationship deepens through conflict over what can survive public scrutiny."
+    ],
+    constellation_shorthand: "fallback_packet_from_manifest_diagnostic: Liv/Eirik competence, attraction, proof, credibility, compromise."
+  };
+}
+
+function buildFallbackStructuralSpinePacket(unitContract) {
+  return {
+    source_section_number: 11,
+    current_unit_spine_function: `fallback_packet_from_manifest_diagnostic: Execute the chapter turn from objective to ending hook: ${unitContract?.objective || "objective"} -> ${unitContract?.ending_hook || "ending hook"}.`,
+    upstream_dependencies: [
+      "The chapter inherits the prior unit's consequences and must not reset pressure.",
+      "Use prior summary/snippet only as continuity support when present."
+    ],
+    downstream_setup_payoffs: [
+      unitContract?.carry_forward || "Carry forward the changed relational, procedural, or evidentiary condition.",
+      "Leave the next unit with a sharper proof, trust, or consequence problem."
+    ],
+    escalation_logic: [
+      "Start from the immediate afterstate.",
+      "Make the procedural or relational conflict unavoidable.",
+      "Force the POV character to choose under pressure.",
+      "End with the contract's forward-pressure condition."
+    ],
+    spine_shorthand: "fallback_packet_from_manifest_diagnostic: afterstate -> conflict -> choice -> forward-pressure handoff."
+  };
+}
+
+function buildFallbackSetpieceSymbolArchitecturePacket() {
+  return {
+    source_section_number: 13,
+    setpiece_mandate: "fallback_packet_from_manifest_diagnostic: Treat documents, tokens, photographs, ferries, cabins, weather, and institutional spaces as pressure architecture when present.",
+    chapter_relevant_setpieces: [
+      "Safehouse/cabin evidentiary aftermath when provided by the unit contract.",
+      "Transit or ferry mapping as a moving pressure space when provided by the unit contract.",
+      "Documented workaround or chain-of-custody procedure as action architecture."
+    ],
+    object_symbol_rules: [
+      "Evidence objects must have public, legal, and emotional consequence.",
+      "Do not let symbolic objects become decorative; make them change choices.",
+      "Any stolen token, notation, photo, or document must be tracked physically and procedurally."
+    ],
+    visual_escalation_cues: [
+      "Wet clothes, hard morning light, ferry motion, documentation surfaces, UV images, maps, and hands on evidence.",
+      "Use weather and travel surfaces to externalize exhaustion and consequence."
+    ],
+    setpiece_failure_signs: [
+      "Evidence becomes vague.",
+      "Symbolic objects lose procedural consequence.",
+      "The scene relies on explanation rather than staged action."
+    ],
+    architecture_shorthand: "fallback_packet_from_manifest_diagnostic: evidence object + public proof + physical pressure space."
+  };
+}
+
+function buildFallbackWorldSettingPalettePacket(unitContract) {
+  return {
+    source_section_number: 8,
+    setting_palette_rules: [
+      `Use the stated setting as active pressure: ${unitContract?.setting || "the chapter setting"}.`,
+      "Prioritize sensory specificity that affects action, proof, and relationship pressure.",
+      "Avoid tourism description and generic weather."
+    ],
+    city_specific_texture_rules: [
+      "Use Norwegian/Nordic coastal severity, institutional restraint, and archival/evidentiary surfaces when compatible with the unit.",
+      "Let transit, water, stone, glass, paper, and light shape behavior."
+    ],
+    environmental_pressure_cues: [
+      "Hard morning light.",
+      "Wet clothing and fatigue.",
+      "Moving ferry or liminal transit spaces.",
+      "Cabin/safehouse containment."
+    ],
+    institutional_surface_rules: [
+      "Procedural settings should feel accountable and public-facing even when private.",
+      "Chain-of-custody and documentation should shape tone and stakes."
+    ],
+    palette_shorthand: "fallback_packet_from_manifest_diagnostic: cold light, wet evidence, public proof, institutional restraint."
+  };
+}
+
+function buildFallbackThematicMoralArchitecturePacket() {
+  return {
+    source_section_number: 9,
+    thematic_mandate: "fallback_packet_from_manifest_diagnostic: Dramatize the cost of proof, truth, credibility, control, and relational compromise.",
+    central_thematic_questions: [
+      "What truth survives if the method of obtaining it destroys credibility?",
+      "What does it cost to surrender singular control to shared proof?",
+      "Can respect become more destabilizing than forgiveness?"
+    ],
+    moral_pressure_lines: [
+      "Private certainty is not the same as survivable public truth.",
+      "The desire to possess the one object can repeat the original failure.",
+      "Effective partnership can deepen compromise."
+    ],
+    private_public_cost_rules: [
+      "Every private emotional move should have public evidentiary consequence.",
+      "Do not let romance or pride outrun proof."
+    ],
+    contradiction_and_complicity_rules: [
+      "The characters may be right and still dangerous to the case.",
+      "Procedure can feel cold while functioning as protection."
+    ],
+    thematic_shorthand: "fallback_packet_from_manifest_diagnostic: proof versus possession; credibility versus hunger; respect as danger."
+  };
+}
+
+function buildFallbackSignatureVerbalDeploymentPacket() {
+  return {
+    source_section_number: 21,
+    signature_language_rules: [
+      "Use precise, pressure-bearing language rather than ornamental mystery.",
+      "Let key phrases emerge from procedure, evidence, weather, and restraint.",
+      "Keep repeated language purposeful, not decorative."
+    ],
+    recurring_phrase_motifs: [
+      "survivable proof",
+      "public imagination",
+      "chain of custody",
+      "what can be proven"
+    ],
+    metaphor_and_comparison_rules: [
+      "Prefer concrete comparisons tied to evidence, water, light, stone, paper, or procedure.",
+      "Avoid generic darkness/light symbolism unless grounded in the scene's physical facts."
+    ],
+    verbal_do_not_use: [
+      "Pseudo-profound thriller maxims.",
+      "Repeated abstract noun clusters.",
+      "Over-explained emotional labels."
+    ],
+    signature_shorthand: "fallback_packet_from_manifest_diagnostic: precise proof-language, concrete motifs, restraint."
+  };
+}
+
+function buildFallbackResearchAuthenticityPacket() {
+  return {
+    source_section_number: 18,
+    authenticity_mandate: "fallback_packet_from_manifest_diagnostic: Maintain procedural plausibility around evidence, documentation, chain of custody, public credibility, and institutional consequence.",
+    procedural_truth_rules: [
+      "Stolen evidence is vulnerable legally, reputationally, and narratively.",
+      "Documentation must be specific enough to feel usable without fake technical overreach.",
+      "A workaround must preserve accountability rather than magically erase risk."
+    ],
+    terminology_and_register_rules: [
+      "Use legal/procedural terms sparingly and clearly.",
+      "Avoid fake expertise and unverifiable jargon.",
+      "Let competent characters explain stakes through consequence, not lectures."
+    ],
+    domain_specific_constraints: [
+      "Evidence handling, archives, transfers, notation systems, and provenance must feel plausible.",
+      "Do not invent impossible institutional shortcuts."
+    ],
+    realism_do_not_fake: [
+      "Do not fake exact legal procedure beyond what the scene requires.",
+      "Do not imply stolen evidence is harmless.",
+      "Do not make public credibility problems disappear."
+    ],
+    authenticity_shorthand: "fallback_packet_from_manifest_diagnostic: plausible evidence handling, no fake procedure, credibility costs."
+  };
+}
+
+function buildFallbackPrestigeQualityAlignmentPacket() {
+  return {
+    source_section_number: 4,
+    prestige_mandate: "fallback_packet_from_manifest_diagnostic: Deliver a polished, adult, prestige-commercial chapter with clean causality, character pressure, and readable suspense.",
+    quality_benchmarks: [
+      "The chapter has a clear objective, conflict, turn, reveal, and ending condition.",
+      "The prose is concrete and controlled rather than generic or overdecorated.",
+      "The emotional relationship pressure is legible through action and subtext.",
+      "The chapter can stand as premium commercial fiction while serving the larger book."
+    ],
+    anti_generic_failures: [
+      "Generic clue-chasing.",
+      "Vague archive/conspiracy language.",
+      "Romantic tension without consequence.",
+      "Prestige tone without story movement."
+    ],
+    audience_promise_rules: [
+      "Reward the reader with progress in evidence, relationship, and moral pressure.",
+      "Keep the ending hook concrete and forward-moving.",
+      "Maintain Kindle-readable momentum."
+    ],
+    prestige_shorthand: "fallback_packet_from_manifest_diagnostic: premium clarity, emotional pressure, evidence movement, no generic mystery fog."
+  };
+}
+
+function buildManifestFallbackNode2Packet(parsedInput, node1Packet = null) {
+  const unitContract = normalizeUnitContractOverride(parsedInput);
+  if (!unitContract) return null;
+
+  const unitLabel = unitContract.unit_label || parsedInput?.selected_unit_label || parsedInput?.chapter_context?.unit_label || "Chapter";
+  const chapterNumber = parsedInput?.selected_chapter_number ?? parsedInput?.chapter_number ?? parsedInput?.chapter_context?.chapter_number ?? null;
+  const chapterTitle = parsedInput?.selected_chapter_title ?? parsedInput?.chapter_title ?? parsedInput?.chapter_context?.chapter_title ?? null;
+
+  const chapterContext = parsedInput?.chapter_context && typeof parsedInput.chapter_context === "object"
+    ? {
+        chapter_number: parsedInput.chapter_context.chapter_number ?? chapterNumber,
+        chapter_title: parsedInput.chapter_context.chapter_title ?? chapterTitle,
+        unit_label: parsedInput.chapter_context.unit_label ?? unitLabel,
+        prior_chapter_summary: parsedInput.chapter_context.prior_chapter_summary ?? null,
+        prior_chapter_end_snippet: parsedInput.chapter_context.prior_chapter_end_snippet ?? null,
+        prior_chapter_ending_condition: parsedInput.chapter_context.prior_chapter_ending_condition ?? null
+      }
+    : {
+        chapter_number: chapterNumber,
+        chapter_title: chapterTitle,
+        unit_label: unitLabel,
+        prior_chapter_summary: null,
+        prior_chapter_end_snippet: null,
+        prior_chapter_ending_condition: null
+      };
+
+  const runConfig = parsedInput?.run_config && typeof parsedInput.run_config === "object"
+    ? parsedInput.run_config
+    : {
+        rewrite_cycles: parsedInput?.rewrite_cycles ?? null,
+        polish_cycles: parsedInput?.polish_cycles ?? null,
+        mode: parsedInput?.execution_mode ?? parsedInput?.mode ?? null
+      };
+
+  return {
+    story_run_id: parsedInput?.story_run_id ?? node1Packet?.story_run_id ?? null,
+    project_id: parsedInput?.project_id ?? node1Packet?.project_id ?? null,
+    chapter_worker_version: parsedInput?.chapter_worker_version ?? node1Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    chapter_context: chapterContext,
+    run_config: runConfig,
+    status: "ready",
+    requested_operation: "draft",
+    resolved_scope: node1Packet?.resolved_scope ?? `single_chapter: ${unitLabel}`,
+    target_units_requested: [unitLabel],
+    canon_basis: "master_story_bible",
+    active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+    drafting_bible_stack: {
+      active_every_time: buildActiveEveryTimeStack()
+    },
+    style_packet: buildFallbackStylePacket(unitContract),
+    dialogue_voice_packet: buildFallbackDialogueVoicePacket(),
+    locked_draft_priorities_packet: buildFallbackLockedDraftPrioritiesPacket(unitContract),
+    character_constellation_packet: buildFallbackCharacterConstellationPacket(unitContract),
+    structural_spine_packet: buildFallbackStructuralSpinePacket(unitContract),
+    setpiece_symbol_architecture_packet: buildFallbackSetpieceSymbolArchitecturePacket(),
+    world_setting_palette_packet: buildFallbackWorldSettingPalettePacket(unitContract),
+    thematic_moral_architecture_packet: buildFallbackThematicMoralArchitecturePacket(),
+    signature_verbal_deployment_packet: buildFallbackSignatureVerbalDeploymentPacket(),
+    research_authenticity_packet: buildFallbackResearchAuthenticityPacket(),
+    prestige_quality_alignment_packet: buildFallbackPrestigeQualityAlignmentPacket(),
+    unit_contracts: [unitContract],
+    downstream_store_requests: buildDefaultDownstreamStoreRequests(),
+    missing_required_inputs: [],
+    blocked_reasons: [],
+    next_node: "N3_Chapter_Drafter"
+  };
+}
+
+function isReadyFullNode2Packet(packet) {
+  if (!packet || typeof packet !== "object") return false;
+  const requiredKeys = [
+    "drafting_bible_stack",
+    "style_packet",
+    "dialogue_voice_packet",
+    "locked_draft_priorities_packet",
+    "character_constellation_packet",
+    "structural_spine_packet",
+    "setpiece_symbol_architecture_packet",
+    "world_setting_palette_packet",
+    "thematic_moral_architecture_packet",
+    "signature_verbal_deployment_packet",
+    "research_authenticity_packet",
+    "prestige_quality_alignment_packet",
+    "unit_contracts",
+    "downstream_store_requests"
+  ];
+
+  return packet.status === "ready" && requiredKeys.every((key) => packet[key] !== undefined && packet[key] !== null);
+}
+
+function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Packet = null) {
+  if (isReadyFullNode2Packet(node2Result?.output_parsed)) {
+    return node2Result;
+  }
+
+  const fallbackPacket = buildManifestFallbackNode2Packet(parsedInput, node1Packet);
+  if (!fallbackPacket) {
+    return node2Result;
+  }
+
+  console.log(
+    "[workflow] applying manifest Node 2 active-stack fallback",
+    fallbackPacket.unit_contracts?.[0]?.unit_label ?? "unknown unit"
+  );
+
+  return {
+    output_text: JSON.stringify(fallbackPacket),
+    output_parsed: fallbackPacket,
+    diagnostic_fallback_applied: true,
+    diagnostic_fallback_version: MANIFEST_NODE2_FALLBACK_VERSION,
+    original_output_parsed: node2Result?.output_parsed ?? null
+  };
+}
+
+function pushCorrectedNode2PacketToHistory(conversationHistory, patchedNode2Packet) {
+  if (!patchedNode2Packet || typeof patchedNode2Packet !== "object") return;
+  conversationHistory.push({
+    role: "user",
+    content: [
+      {
+        type: "input_text",
+        text:
+          "CORRECTED_NODE2_READY_PACKET_FROM_MANIFEST_FALLBACK\n" +
+          JSON.stringify(patchedNode2Packet)
+      }
+    ]
+  });
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
@@ -6059,14 +6638,24 @@ export async function runWorkflow(workflow) {
         return node1Result;
       }
 
-      const node2Result = await runNode(
+      const rawNode2Result = await runNode(
         node2UnitContractBuilder,
         runner,
         conversationHistory,
         "Node 2"
       );
 
+      const node2Result = patchNode2ResultWithManifestFallback(
+        rawNode2Result,
+        parsedInput,
+        node1Result.output_parsed
+      );
+
       console.log("[Node 2] status", node2Result.output_parsed.status);
+      console.log(
+        "[Node 2] manifest_fallback_applied",
+        node2Result.diagnostic_fallback_applied === true
+      );
       console.log("[workflow] debug_stop_after_node2 exiting after Node 2");
 
       return node2Result;
@@ -6087,16 +6676,29 @@ export async function runWorkflow(workflow) {
     }
 
     // NODE 2
-    const node2Result = await runNode(
+    const rawNode2Result = await runNode(
       node2UnitContractBuilder,
       runner,
       conversationHistory,
       "Node 2"
     );
+    const node2Result = patchNode2ResultWithManifestFallback(
+      rawNode2Result,
+      parsedInput,
+      node1Result.output_parsed
+    );
     console.log("[Node 2] status", node2Result.output_parsed.status);
+    console.log(
+      "[Node 2] manifest_fallback_applied",
+      node2Result.diagnostic_fallback_applied === true
+    );
     if (node2Result.output_parsed.status !== "ready") {
       console.log("[workflow] exiting after Node 2");
       return node2Result;
+    }
+
+    if (node2Result.diagnostic_fallback_applied === true) {
+      pushCorrectedNode2PacketToHistory(conversationHistory, node2Result.output_parsed);
     }
 
     // NODE 3
