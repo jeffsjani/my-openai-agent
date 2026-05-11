@@ -3,7 +3,7 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
-const AGENT_BACKGROUND_VERSION = "agent-background-manifest-node2-fallback-v2026-05-09-01";
+const AGENT_BACKGROUND_VERSION = "agent-background-cycle-guard-v2026-05-11-02";
 
 // Tool definitions
 const fileSearch = fileSearchTool([
@@ -2279,8 +2279,8 @@ Treat the chapter as structurally locked only when one of the following is true:
 - the most recent valid upstream source is Node 5 with:
   - status = \"ready\"
   - requested_operation = \"rewrite\"
-  - rewrite_cycle_completed = 4
   - remaining_rewrite_cycles = 0
+  - rewrite_cycle_completed equals the configured rewrite-cycle maximum from run_config when available
   - drafted_units exists
   - drafted_units has at least one item
   - drafted_units[0].drafted_text is non-empty
@@ -2318,8 +2318,8 @@ A valid upstream source must satisfy:
 
 If source is Node 5, it must also satisfy:
 - requested_operation = \"rewrite\"
-- rewrite_cycle_completed = 4
 - remaining_rewrite_cycles = 0
+- rewrite_cycle_completed equals the configured rewrite-cycle maximum from run_config when available
 
 If source is Node 8, it must also satisfy:
 - requested_operation = \"polish\"
@@ -2509,8 +2509,8 @@ Validity rules:
 If source is N5:
 - status = \"ready\"
 - requested_operation = \"rewrite\"
-- rewrite_cycle_completed = 4
 - remaining_rewrite_cycles = 0
+- rewrite_cycle_completed equals the configured rewrite-cycle maximum from run_config when available
 - target_units_requested matches Node 6 target_units_requested
 - drafted_units exists and drafted_units[0].drafted_text is non-empty
 
@@ -2815,8 +2815,8 @@ Validity rules:
 If source is N5:
 - status = \"ready\"
 - requested_operation = \"rewrite\"
-- rewrite_cycle_completed = 4
 - remaining_rewrite_cycles = 0
+- rewrite_cycle_completed equals the configured rewrite-cycle maximum from run_config when available
 - target_units_requested matches Node 7 target_units_requested
 - drafted_units exists and drafted_units[0].drafted_text is non-empty
 
@@ -3372,10 +3372,12 @@ function toInt(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function safeCycleCount(value, fallback = 1) {
+function safeCycleCount(value, fallback = 1, options = {}) {
+  const min = Number.isFinite(Number(options.min)) ? Number(options.min) : 0;
+  const max = Number.isFinite(Number(options.max)) ? Number(options.max) : 4;
   const n = toInt(value, fallback);
-  if (n < 1) return 1;
-  if (n > 4) return 4;
+  if (n < min) return min;
+  if (n > max) return max;
   return n;
 }
 
@@ -4139,6 +4141,21 @@ function pushCorrectedNode2PacketToHistory(conversationHistory, patchedNode2Pack
   });
 }
 
+function pushCorrectedNode5PacketToHistory(conversationHistory, patchedNode5Packet) {
+  if (!patchedNode5Packet || typeof patchedNode5Packet !== "object") return;
+  conversationHistory.push({
+    role: "user",
+    content: [
+      {
+        type: "input_text",
+        text:
+          "CORRECTED_NODE5_READY_PACKET_FROM_CONFIGURED_REWRITE_LIMIT\n" +
+          JSON.stringify(patchedNode5Packet)
+      }
+    ]
+  });
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
@@ -4256,13 +4273,15 @@ export async function runWorkflow(workflow) {
     console.log("[workflow] effective rawInput length", rawInput.length);
 
     const configuredRewriteCycles = safeCycleCount(
-      parsedInput?.run_config?.rewrite_cycles,
-      4
+      parsedInput?.run_config?.rewrite_cycles ?? parsedInput?.rewrite_cycles,
+      4,
+      { min: 0, max: 4 }
     );
 
     const configuredPolishCycles = safeCycleCount(
-      parsedInput?.run_config?.polish_cycles,
-      1
+      parsedInput?.run_config?.polish_cycles ?? parsedInput?.polish_cycles,
+      1,
+      { min: 0, max: 2 }
     );
 
     console.log("[workflow] configuredRewriteCycles", configuredRewriteCycles);
@@ -6767,25 +6786,40 @@ export async function runWorkflow(workflow) {
         return node5Result;
       }
 
-      state.rewrite_cycle_completed = toInt(
-        node5Result.output_parsed.rewrite_cycle_completed,
-        0
-      );
-      state.max_enhancement_cycles = toInt(
-        node5Result.output_parsed.max_enhancement_cycles,
+      // Enforce the configured rewrite-cycle cap in orchestration code.
+      // Node 4B/Node 5 prompts may still speak in terms of a 4-cycle maximum,
+      // but the workflow state must obey the request payload run_config.
+      state.rewrite_cycle_completed = Math.min(
+        toInt(node5Result.output_parsed.rewrite_cycle_completed, 0),
         configuredRewriteCycles
       );
-      state.remaining_rewrite_cycles = toInt(
-        node5Result.output_parsed.remaining_rewrite_cycles,
+      state.max_enhancement_cycles = configuredRewriteCycles;
+      state.remaining_rewrite_cycles = Math.max(
+        configuredRewriteCycles - state.rewrite_cycle_completed,
         0
       );
       state.last_node5_status = node5Result.output_parsed.status;
+
+      const patchedNode5Packet = {
+        ...node5Result.output_parsed,
+        max_enhancement_cycles: configuredRewriteCycles,
+        remaining_rewrite_cycles: state.remaining_rewrite_cycles,
+        next_node:
+          state.remaining_rewrite_cycles > 0
+            ? "N4A_Upstream_Draft_Gate"
+            : configuredPolishCycles > 0
+              ? "N6_Polish_Pass_1"
+              : "N9_Final_Chapter_Output"
+      };
+
+      pushCorrectedNode5PacketToHistory(conversationHistory, patchedNode5Packet);
 
       console.log("[rewrite] state updated", JSON.stringify({
         rewrite_cycle_completed: state.rewrite_cycle_completed,
         max_enhancement_cycles: state.max_enhancement_cycles,
         remaining_rewrite_cycles: state.remaining_rewrite_cycles,
         last_node5_status: state.last_node5_status,
+        configuredRewriteCycles,
       }));
     }
 
