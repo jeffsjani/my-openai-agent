@@ -4080,6 +4080,168 @@ function buildManifestFallbackNode2Packet(parsedInput, node1Packet = null) {
   };
 }
 
+
+
+// -----------------------------------------------------------------------------
+// Incoming active-stack packet helpers
+// Version: incoming-active-stack-node2-prefer-v2026-05-11-01
+// Purpose:
+// - Prefer structured packet rows from BuildShip/projectBiblePacketsLive when
+//   present in the payload.
+// - This avoids relying on Node 2 File Search extraction when /start has already
+//   normalized the active stack into active_stack_override and top-level packets.
+// - It also prevents Node 3 from receiving a Node 2 packet that is "ready" but
+//   effectively missing packet fields.
+// -----------------------------------------------------------------------------
+const INCOMING_ACTIVE_STACK_NODE2_VERSION = "incoming-active-stack-node2-prefer-v2026-05-11-01";
+
+const ACTIVE_PACKET_KEYS = [
+  "style_packet",
+  "dialogue_voice_packet",
+  "locked_draft_priorities_packet",
+  "character_constellation_packet",
+  "structural_spine_packet",
+  "setpiece_symbol_architecture_packet",
+  "world_setting_palette_packet",
+  "thematic_moral_architecture_packet",
+  "signature_verbal_deployment_packet",
+  "research_authenticity_packet",
+  "prestige_quality_alignment_packet"
+];
+
+function getIncomingPacket(parsedInput, key) {
+  return (
+    parsedInput?.[key] ??
+    parsedInput?.active_stack_override?.[key] ??
+    parsedInput?.drafting_bible_stack?.[key] ??
+    null
+  );
+}
+
+function hasIncomingActiveStack(parsedInput) {
+  return ACTIVE_PACKET_KEYS.every((key) => {
+    const value = getIncomingPacket(parsedInput, key);
+    return value && typeof value === "object";
+  });
+}
+
+function normalizeIncomingUnitContracts(parsedInput) {
+  if (Array.isArray(parsedInput?.unit_contracts) && parsedInput.unit_contracts.length > 0) {
+    return parsedInput.unit_contracts;
+  }
+
+  if (
+    parsedInput?.unit_contracts &&
+    typeof parsedInput.unit_contracts === "object" &&
+    Array.isArray(parsedInput.unit_contracts.unit_contracts)
+  ) {
+    return parsedInput.unit_contracts.unit_contracts;
+  }
+
+  if (
+    parsedInput?.unit_contracts &&
+    typeof parsedInput.unit_contracts === "object" &&
+    parsedInput.unit_contracts.unit_contract_override
+  ) {
+    return [parsedInput.unit_contracts.unit_contract_override];
+  }
+
+  const normalizedOverride = normalizeUnitContractOverride(parsedInput);
+  return normalizedOverride ? [normalizedOverride] : [];
+}
+
+function buildIncomingActiveStackNode2Packet(parsedInput, node1Packet = null) {
+  if (!hasIncomingActiveStack(parsedInput)) return null;
+
+  const unitContracts = normalizeIncomingUnitContracts(parsedInput);
+  if (!Array.isArray(unitContracts) || unitContracts.length === 0) return null;
+
+  const firstUnit = unitContracts[0] ?? {};
+  const unitLabel =
+    firstNonEmpty(
+      firstUnit.unit_label,
+      parsedInput?.selected_unit_label,
+      parsedInput?.current_unit_label,
+      parsedInput?.chapter_context?.unit_label,
+      node1Packet?.target_units_requested?.[0]
+    ) ?? "Chapter";
+
+  const chapterNumber =
+    parsedInput?.chapter_context?.chapter_number ??
+    parsedInput?.selected_chapter_number ??
+    parsedInput?.current_chapter_number ??
+    parsedInput?.chapter_number ??
+    null;
+
+  const chapterTitle =
+    parsedInput?.chapter_context?.chapter_title ??
+    parsedInput?.selected_chapter_title ??
+    parsedInput?.current_chapter_title ??
+    parsedInput?.chapter_title ??
+    null;
+
+  const chapterContext = parsedInput?.chapter_context && typeof parsedInput.chapter_context === "object"
+    ? {
+        chapter_number: parsedInput.chapter_context.chapter_number ?? chapterNumber,
+        chapter_title: parsedInput.chapter_context.chapter_title ?? chapterTitle,
+        unit_label: parsedInput.chapter_context.unit_label ?? unitLabel,
+        prior_chapter_summary: parsedInput.chapter_context.prior_chapter_summary ?? null,
+        prior_chapter_end_snippet: parsedInput.chapter_context.prior_chapter_end_snippet ?? null,
+        prior_chapter_ending_condition: parsedInput.chapter_context.prior_chapter_ending_condition ?? null
+      }
+    : {
+        chapter_number: chapterNumber,
+        chapter_title: chapterTitle,
+        unit_label: unitLabel,
+        prior_chapter_summary: null,
+        prior_chapter_end_snippet: null,
+        prior_chapter_ending_condition: null
+      };
+
+  const runConfig = parsedInput?.run_config && typeof parsedInput.run_config === "object"
+    ? parsedInput.run_config
+    : {
+        rewrite_cycles: parsedInput?.rewrite_cycles ?? null,
+        polish_cycles: parsedInput?.polish_cycles ?? null,
+        mode: parsedInput?.execution_mode ?? parsedInput?.mode ?? null
+      };
+
+  const packet = {
+    story_run_id: parsedInput?.story_run_id ?? node1Packet?.story_run_id ?? null,
+    project_id: parsedInput?.project_id ?? node1Packet?.project_id ?? null,
+    chapter_worker_version: parsedInput?.chapter_worker_version ?? node1Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    chapter_context: chapterContext,
+    run_config: runConfig,
+    status: "ready",
+    requested_operation: "draft",
+    resolved_scope: node1Packet?.resolved_scope ?? `single_chapter: ${unitLabel}`,
+    target_units_requested: [unitLabel],
+    canon_basis: "master_story_bible",
+    active_bible_sections: [12, 3, 15, 19, 7, 11, 13, 8, 9, 21, 18, 4],
+    drafting_bible_stack: {
+      active_every_time: buildActiveEveryTimeStack()
+    },
+    style_packet: getIncomingPacket(parsedInput, "style_packet"),
+    dialogue_voice_packet: getIncomingPacket(parsedInput, "dialogue_voice_packet"),
+    locked_draft_priorities_packet: getIncomingPacket(parsedInput, "locked_draft_priorities_packet"),
+    character_constellation_packet: getIncomingPacket(parsedInput, "character_constellation_packet"),
+    structural_spine_packet: getIncomingPacket(parsedInput, "structural_spine_packet"),
+    setpiece_symbol_architecture_packet: getIncomingPacket(parsedInput, "setpiece_symbol_architecture_packet"),
+    world_setting_palette_packet: getIncomingPacket(parsedInput, "world_setting_palette_packet"),
+    thematic_moral_architecture_packet: getIncomingPacket(parsedInput, "thematic_moral_architecture_packet"),
+    signature_verbal_deployment_packet: getIncomingPacket(parsedInput, "signature_verbal_deployment_packet"),
+    research_authenticity_packet: getIncomingPacket(parsedInput, "research_authenticity_packet"),
+    prestige_quality_alignment_packet: getIncomingPacket(parsedInput, "prestige_quality_alignment_packet"),
+    unit_contracts: unitContracts,
+    downstream_store_requests: parsedInput?.downstream_store_requests ?? buildDefaultDownstreamStoreRequests(),
+    missing_required_inputs: [],
+    blocked_reasons: [],
+    next_node: "N3_Chapter_Drafter"
+  };
+
+  return isReadyFullNode2Packet(packet) ? packet : null;
+}
+
 function isReadyFullNode2Packet(packet) {
   if (!packet || typeof packet !== "object") return false;
   const requiredKeys = [
@@ -4103,6 +4265,24 @@ function isReadyFullNode2Packet(packet) {
 }
 
 function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Packet = null) {
+  const incomingActiveStackPacket = buildIncomingActiveStackNode2Packet(parsedInput, node1Packet);
+
+  if (incomingActiveStackPacket) {
+    console.log(
+      "[workflow] applying incoming active-stack Node 2 packet",
+      incomingActiveStackPacket.unit_contracts?.[0]?.unit_label ?? "unknown unit"
+    );
+
+    return {
+      output_text: JSON.stringify(incomingActiveStackPacket),
+      output_parsed: incomingActiveStackPacket,
+      diagnostic_fallback_applied: true,
+      diagnostic_fallback_version: INCOMING_ACTIVE_STACK_NODE2_VERSION,
+      diagnostic_source: "incoming_active_stack_override",
+      original_output_parsed: node2Result?.output_parsed ?? null
+    };
+  }
+
   if (isReadyFullNode2Packet(node2Result?.output_parsed)) {
     return node2Result;
   }
@@ -4122,6 +4302,7 @@ function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Pac
     output_parsed: fallbackPacket,
     diagnostic_fallback_applied: true,
     diagnostic_fallback_version: MANIFEST_NODE2_FALLBACK_VERSION,
+    diagnostic_source: "manifest_fallback",
     original_output_parsed: node2Result?.output_parsed ?? null
   };
 }
