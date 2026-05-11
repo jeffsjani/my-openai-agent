@@ -3,7 +3,7 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
-const AGENT_BACKGROUND_VERSION = "agent-background-cycle-guard-v2026-05-11-02";
+const AGENT_BACKGROUND_VERSION = "agent-background-active-stack-embedded-v2026-05-11-03";
 
 // Tool definitions
 const fileSearch = fileSearchTool([
@@ -4093,7 +4093,7 @@ function buildManifestFallbackNode2Packet(parsedInput, node1Packet = null) {
 // - It also prevents Node 3 from receiving a Node 2 packet that is "ready" but
 //   effectively missing packet fields.
 // -----------------------------------------------------------------------------
-const INCOMING_ACTIVE_STACK_NODE2_VERSION = "incoming-active-stack-node2-prefer-v2026-05-11-01";
+const INCOMING_ACTIVE_STACK_NODE2_VERSION = "incoming-active-stack-embedded-prefer-v2026-05-11-03";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -4109,41 +4109,159 @@ const ACTIVE_PACKET_KEYS = [
   "prestige_quality_alignment_packet"
 ];
 
+function objectHasKeys(value, minKeys = 1) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length >= minKeys;
+}
+
+function coerceObject(value) {
+  if (!value) return null;
+  if (typeof value === "object" && !Array.isArray(value)) return value;
+  const parsed = parseMaybeJson(value);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  return null;
+}
+
+function packetLooksUsable(value) {
+  const obj = coerceObject(value);
+  if (!obj) return false;
+  if (obj.source_section_number != null) return true;
+  if (obj.sourceSectionNumber != null) return true;
+  // Some BuildShip packet rows may be stored as plain JSON objects without source_section_number.
+  return Object.keys(obj).length >= 2;
+}
+
+function mergeEmbeddedRequestPayload(parsedInput) {
+  if (!parsedInput || typeof parsedInput !== "object") return {};
+
+  const embedded =
+    coerceObject(parsedInput.request_payload_json) ??
+    coerceObject(parsedInput.request_payload) ??
+    coerceObject(parsedInput.payload_json) ??
+    null;
+
+  if (!embedded) {
+    console.log("[workflow] embedded request_payload_json present", false);
+    return parsedInput;
+  }
+
+  const merged = {
+    ...embedded,
+    ...parsedInput,
+    // Preserve the original embedded JSON string for callback/debugging.
+    request_payload_json: parsedInput.request_payload_json ?? JSON.stringify(embedded)
+  };
+
+  // Merge nested objects carefully so top-level runtime fields still win,
+  // while embedded active-stack fields are not lost.
+  merged.run_config = {
+    ...(embedded.run_config && typeof embedded.run_config === "object" ? embedded.run_config : {}),
+    ...(parsedInput.run_config && typeof parsedInput.run_config === "object" ? parsedInput.run_config : {})
+  };
+
+  merged.chapter_context = {
+    ...(embedded.chapter_context && typeof embedded.chapter_context === "object" ? embedded.chapter_context : {}),
+    ...(parsedInput.chapter_context && typeof parsedInput.chapter_context === "object" ? parsedInput.chapter_context : {})
+  };
+
+  merged.active_stack_override = {
+    ...(embedded.active_stack_override && typeof embedded.active_stack_override === "object" ? embedded.active_stack_override : {}),
+    ...(parsedInput.active_stack_override && typeof parsedInput.active_stack_override === "object" ? parsedInput.active_stack_override : {})
+  };
+
+  merged.drafting_bible_stack = {
+    ...(embedded.drafting_bible_stack && typeof embedded.drafting_bible_stack === "object" ? embedded.drafting_bible_stack : {}),
+    ...(parsedInput.drafting_bible_stack && typeof parsedInput.drafting_bible_stack === "object" ? parsedInput.drafting_bible_stack : {})
+  };
+
+  for (const key of ACTIVE_PACKET_KEYS) {
+    if (parsedInput[key] == null && embedded[key] != null) {
+      merged[key] = embedded[key];
+    }
+  }
+
+  if (parsedInput.unit_contracts == null && embedded.unit_contracts != null) {
+    merged.unit_contracts = embedded.unit_contracts;
+  }
+
+  if (parsedInput.unit_contract_override == null && embedded.unit_contract_override != null) {
+    merged.unit_contract_override = embedded.unit_contract_override;
+  }
+
+  if (parsedInput.downstream_store_requests == null && embedded.downstream_store_requests != null) {
+    merged.downstream_store_requests = embedded.downstream_store_requests;
+  }
+
+  console.log("[workflow] embedded request_payload_json present", true);
+  console.log("[workflow] embedded request_payload_json keys", Object.keys(embedded));
+
+  return merged;
+}
+
 function getIncomingPacket(parsedInput, key) {
-  return (
-    parsedInput?.[key] ??
-    parsedInput?.active_stack_override?.[key] ??
-    parsedInput?.drafting_bible_stack?.[key] ??
-    null
-  );
+  const candidates = [
+    parsedInput?.[key],
+    parsedInput?.active_stack_override?.[key],
+    parsedInput?.drafting_bible_stack?.[key],
+    coerceObject(parsedInput?.request_payload_json)?.[key],
+    coerceObject(parsedInput?.request_payload_json)?.active_stack_override?.[key],
+    coerceObject(parsedInput?.request_payload_json)?.drafting_bible_stack?.[key]
+  ];
+
+  for (const candidate of candidates) {
+    const obj = coerceObject(candidate);
+    if (obj) return obj;
+  }
+
+  return null;
+}
+
+function incomingActiveStackDiagnostics(parsedInput) {
+  const present = ACTIVE_PACKET_KEYS.filter((key) => packetLooksUsable(getIncomingPacket(parsedInput, key)));
+  const missing = ACTIVE_PACKET_KEYS.filter((key) => !packetLooksUsable(getIncomingPacket(parsedInput, key)));
+  return {
+    present_count: present.length,
+    missing_count: missing.length,
+    present,
+    missing,
+    has_active_stack_override: objectHasKeys(parsedInput?.active_stack_override),
+    active_stack_override_keys: objectHasKeys(parsedInput?.active_stack_override) ? Object.keys(parsedInput.active_stack_override) : [],
+    has_drafting_bible_stack: objectHasKeys(parsedInput?.drafting_bible_stack),
+    drafting_bible_stack_keys: objectHasKeys(parsedInput?.drafting_bible_stack) ? Object.keys(parsedInput.drafting_bible_stack) : [],
+    has_embedded_request_payload_json: !!coerceObject(parsedInput?.request_payload_json),
+    embedded_request_payload_keys: coerceObject(parsedInput?.request_payload_json) ? Object.keys(coerceObject(parsedInput.request_payload_json)) : []
+  };
 }
 
 function hasIncomingActiveStack(parsedInput) {
-  return ACTIVE_PACKET_KEYS.every((key) => {
-    const value = getIncomingPacket(parsedInput, key);
-    return value && typeof value === "object";
-  });
+  return ACTIVE_PACKET_KEYS.every((key) => packetLooksUsable(getIncomingPacket(parsedInput, key)));
 }
 
 function normalizeIncomingUnitContracts(parsedInput) {
-  if (Array.isArray(parsedInput?.unit_contracts) && parsedInput.unit_contracts.length > 0) {
-    return parsedInput.unit_contracts;
+  const unitContractsRaw =
+    parsedInput?.unit_contracts ??
+    coerceObject(parsedInput?.request_payload_json)?.unit_contracts ??
+    null;
+
+  const unitContracts = parseMaybeJson(unitContractsRaw) ?? unitContractsRaw;
+
+  if (Array.isArray(unitContracts) && unitContracts.length > 0) {
+    return unitContracts;
   }
 
   if (
-    parsedInput?.unit_contracts &&
-    typeof parsedInput.unit_contracts === "object" &&
-    Array.isArray(parsedInput.unit_contracts.unit_contracts)
+    unitContracts &&
+    typeof unitContracts === "object" &&
+    Array.isArray(unitContracts.unit_contracts)
   ) {
-    return parsedInput.unit_contracts.unit_contracts;
+    return unitContracts.unit_contracts;
   }
 
   if (
-    parsedInput?.unit_contracts &&
-    typeof parsedInput.unit_contracts === "object" &&
-    parsedInput.unit_contracts.unit_contract_override
+    unitContracts &&
+    typeof unitContracts === "object" &&
+    unitContracts.unit_contract_override
   ) {
-    return [parsedInput.unit_contracts.unit_contract_override];
+    return [unitContracts.unit_contract_override];
   }
 
   const normalizedOverride = normalizeUnitContractOverride(parsedInput);
@@ -4244,27 +4362,36 @@ function buildIncomingActiveStackNode2Packet(parsedInput, node1Packet = null) {
 
 function isReadyFullNode2Packet(packet) {
   if (!packet || typeof packet !== "object") return false;
-  const requiredKeys = [
-    "drafting_bible_stack",
-    "style_packet",
-    "dialogue_voice_packet",
-    "locked_draft_priorities_packet",
-    "character_constellation_packet",
-    "structural_spine_packet",
-    "setpiece_symbol_architecture_packet",
-    "world_setting_palette_packet",
-    "thematic_moral_architecture_packet",
-    "signature_verbal_deployment_packet",
-    "research_authenticity_packet",
-    "prestige_quality_alignment_packet",
-    "unit_contracts",
-    "downstream_store_requests"
-  ];
+  if (packet.status !== "ready") return false;
 
-  return packet.status === "ready" && requiredKeys.every((key) => packet[key] !== undefined && packet[key] !== null);
+  const activePacketsUsable = ACTIVE_PACKET_KEYS.every((key) => packetLooksUsable(packet[key]));
+
+  const unitContractsUsable =
+    Array.isArray(packet.unit_contracts) &&
+    packet.unit_contracts.length > 0 &&
+    packet.unit_contracts.every((item) => item && typeof item === "object" && String(item.unit_label ?? "").trim().length > 0);
+
+  const draftingStackUsable =
+    packet.drafting_bible_stack &&
+    typeof packet.drafting_bible_stack === "object" &&
+    Array.isArray(packet.drafting_bible_stack.active_every_time) &&
+    packet.drafting_bible_stack.active_every_time.length >= 12;
+
+  const downstreamStoreUsable =
+    packet.downstream_store_requests &&
+    typeof packet.downstream_store_requests === "object" &&
+    packet.downstream_store_requests.drafting_rules_request &&
+    packet.downstream_store_requests.polish_rules_request;
+
+  return activePacketsUsable && unitContractsUsable && draftingStackUsable && downstreamStoreUsable;
 }
 
 function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Packet = null) {
+  console.log(
+    "[workflow] incoming active-stack diagnostics",
+    JSON.stringify(incomingActiveStackDiagnostics(parsedInput))
+  );
+
   const incomingActiveStackPacket = buildIncomingActiveStackNode2Packet(parsedInput, node1Packet);
 
   if (incomingActiveStackPacket) {
@@ -4399,6 +4526,9 @@ export async function runWorkflow(workflow) {
       parsedInput = {};
       console.log("[workflow] parsedInput JSON parse failed, using {}");
     }
+
+    parsedInput = mergeEmbeddedRequestPayload(parsedInput);
+    console.log("[workflow] parsedInput keys after embedded merge", Object.keys(parsedInput));
 
     const normalizedUnitContractOverride = normalizeUnitContractOverride(parsedInput);
     if (normalizedUnitContractOverride) {
