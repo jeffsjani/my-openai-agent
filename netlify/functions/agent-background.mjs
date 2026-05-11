@@ -3,7 +3,7 @@
 import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
-const AGENT_BACKGROUND_VERSION = "agent-background-active-stack-embedded-v2026-05-11-03";
+const AGENT_BACKGROUND_VERSION = "agent-background-active-stack-embedded-forced-manifest-v2026-05-11-04";
 
 // Tool definitions
 const fileSearch = fileSearchTool([
@@ -4387,9 +4387,24 @@ function isReadyFullNode2Packet(packet) {
 }
 
 function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Packet = null) {
+  const diagnostics = incomingActiveStackDiagnostics(parsedInput);
+
   console.log(
     "[workflow] incoming active-stack diagnostics",
-    JSON.stringify(incomingActiveStackDiagnostics(parsedInput))
+    JSON.stringify(diagnostics)
+  );
+
+  console.log(
+    "[workflow] Node 2 output readiness diagnostics",
+    JSON.stringify({
+      node2_status: node2Result?.output_parsed?.status ?? null,
+      node2_is_ready_full_packet: isReadyFullNode2Packet(node2Result?.output_parsed),
+      node2_packet_keys_present: ACTIVE_PACKET_KEYS.filter((key) => packetLooksUsable(node2Result?.output_parsed?.[key])),
+      node2_packet_keys_missing: ACTIVE_PACKET_KEYS.filter((key) => !packetLooksUsable(node2Result?.output_parsed?.[key])),
+      node2_unit_contracts_count: Array.isArray(node2Result?.output_parsed?.unit_contracts)
+        ? node2Result.output_parsed.unit_contracts.length
+        : null
+    })
   );
 
   const incomingActiveStackPacket = buildIncomingActiveStackNode2Packet(parsedInput, node1Packet);
@@ -4406,6 +4421,35 @@ function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Pac
       diagnostic_fallback_applied: true,
       diagnostic_fallback_version: INCOMING_ACTIVE_STACK_NODE2_VERSION,
       diagnostic_source: "incoming_active_stack_override",
+      diagnostic_active_stack_diagnostics: diagnostics,
+      original_output_parsed: node2Result?.output_parsed ?? null
+    };
+  }
+
+  /**
+   * IMPORTANT v2026-05-11-04:
+   * If BuildShip did not send the active-stack packets but did send a usable
+   * unit_contract_override, force the deterministic manifest fallback BEFORE
+   * trusting a runtime Node 2 result. This prevents a Node 2 "ready" packet
+   * from reaching Node 3 when it is still missing one or more required stack
+   * packets. It also keeps Glide tests moving while upstream packet lookup is
+   * being fixed.
+   */
+  const fallbackPacket = buildManifestFallbackNode2Packet(parsedInput, node1Packet);
+
+  if (fallbackPacket) {
+    console.log(
+      "[workflow] applying manifest Node 2 active-stack fallback",
+      fallbackPacket.unit_contracts?.[0]?.unit_label ?? "unknown unit"
+    );
+
+    return {
+      output_text: JSON.stringify(fallbackPacket),
+      output_parsed: fallbackPacket,
+      diagnostic_fallback_applied: true,
+      diagnostic_fallback_version: MANIFEST_NODE2_FALLBACK_VERSION,
+      diagnostic_source: "manifest_fallback_forced_before_node2_ready_result",
+      diagnostic_active_stack_diagnostics: diagnostics,
       original_output_parsed: node2Result?.output_parsed ?? null
     };
   }
@@ -4414,24 +4458,7 @@ function patchNode2ResultWithManifestFallback(node2Result, parsedInput, node1Pac
     return node2Result;
   }
 
-  const fallbackPacket = buildManifestFallbackNode2Packet(parsedInput, node1Packet);
-  if (!fallbackPacket) {
-    return node2Result;
-  }
-
-  console.log(
-    "[workflow] applying manifest Node 2 active-stack fallback",
-    fallbackPacket.unit_contracts?.[0]?.unit_label ?? "unknown unit"
-  );
-
-  return {
-    output_text: JSON.stringify(fallbackPacket),
-    output_parsed: fallbackPacket,
-    diagnostic_fallback_applied: true,
-    diagnostic_fallback_version: MANIFEST_NODE2_FALLBACK_VERSION,
-    diagnostic_source: "manifest_fallback",
-    original_output_parsed: node2Result?.output_parsed ?? null
-  };
+  return node2Result;
 }
 
 function pushCorrectedNode2PacketToHistory(conversationHistory, patchedNode2Packet) {
