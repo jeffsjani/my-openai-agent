@@ -7289,4 +7289,3 @@ export default async (req, context) => {
 // netlify/functions/agent-background.mjs
 //
 // Do not add a custom `path` config until the default background endpoint
-// is confirmed working.
