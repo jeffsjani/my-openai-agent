@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-12-01-intake
+// Version: agent-background-stage-v2026-05-12-02-intake-flat-callback
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -19,7 +19,7 @@
 // - AGENT_STAGE_SHARED_SECRET=<stage-specific override; falls back to AGENT_SHARED_SECRET>
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-12-01-intake";
+  "agent-background-stage-v2026-05-12-02-intake-flat-callback";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -483,7 +483,9 @@ async function postStageComplete(stageResult) {
   const response = await fetch(stageCompleteUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify({ callback: stageResult })
+    // BuildShip /story-run/stage-complete now expects a flat callback payload,
+    // not { callback: ... }.
+    body: JSON.stringify(stageResult)
   });
   const responseText = await response.text();
   console.log("[agent-background-stage] stage callback status", response.status);
