@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-12-02-intake-flat-callback
+// Version: agent-background-stage-v2026-05-12-03-intake-stage-payload-unwrap
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -19,7 +19,7 @@
 // - AGENT_STAGE_SHARED_SECRET=<stage-specific override; falls back to AGENT_SHARED_SECRET>
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-12-02-intake-flat-callback";
+  "agent-background-stage-v2026-05-12-03-intake-stage-payload-unwrap";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -443,6 +443,32 @@ function buildNotImplementedStageResult(payload, stage) {
   };
 }
 
+
+function unwrapStagePayload(body) {
+  if (!body || typeof body !== "object") return body;
+
+  if (
+    body.stage_payload &&
+    typeof body.stage_payload === "object" &&
+    !Array.isArray(body.stage_payload)
+  ) {
+    return body.stage_payload;
+  }
+
+  if (typeof body.stage_payload_json === "string") {
+    try {
+      const parsed = JSON.parse(body.stage_payload_json);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (error) {
+      console.error("[agent-background-stage] Failed to parse stage_payload_json", error);
+    }
+  }
+
+  return body;
+}
+
 function buildStageResult(body) {
   const payload = mergeEmbeddedRequestPayload(body);
   const stage = safeString(payload.stage, "intake");
@@ -563,25 +589,38 @@ export default async (req, context) => {
       return json(debugPayload, 200);
     }
 
-    if (!body?.story_run_id || !body?.chapter_run_id || !body?.stage) {
+    const effectiveBody = unwrapStagePayload(body);
+
+    console.log("[agent-background-stage] effective_body_keys", Object.keys(effectiveBody || {}));
+    console.log("[agent-background-stage] effective_story_run_id", effectiveBody?.story_run_id ?? null);
+    console.log("[agent-background-stage] effective_chapter_run_id", effectiveBody?.chapter_run_id ?? null);
+    console.log("[agent-background-stage] effective_stage", effectiveBody?.stage ?? null);
+
+    if (!effectiveBody?.story_run_id || !effectiveBody?.chapter_run_id || !effectiveBody?.stage) {
       const failurePayload = {
         ok: false,
-        story_run_id: body?.story_run_id ?? null,
-        chapter_run_id: body?.chapter_run_id ?? null,
-        stage: body?.stage ?? null,
+        story_run_id: effectiveBody?.story_run_id ?? body?.story_run_id ?? null,
+        chapter_run_id: effectiveBody?.chapter_run_id ?? body?.chapter_run_id ?? null,
+        stage: effectiveBody?.stage ?? body?.stage ?? null,
         stage_status: "failed",
         next_stage: "",
         current_node: "stage:request:validation",
         stage_completed_at: new Date().toISOString(),
         error_message: "Stage payload must include story_run_id, chapter_run_id, and stage.",
         stage_error_message: "Stage payload must include story_run_id, chapter_run_id, and stage.",
-        result_payload_json: { ok: false, error_type: "missing_required_stage_fields", received_keys: Object.keys(body || {}), agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION }
+        result_payload_json: {
+          ok: false,
+          error_type: "missing_required_stage_fields",
+          received_keys: Object.keys(body || {}),
+          effective_body_keys: Object.keys(effectiveBody || {}),
+          agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION
+        }
       };
       await postStageComplete(failurePayload);
       return json(failurePayload, 400);
     }
 
-    const stageResult = buildStageResult(body);
+    const stageResult = buildStageResult(effectiveBody);
     const callbackResult = await postStageComplete(stageResult);
     return json({
       accepted: true,
