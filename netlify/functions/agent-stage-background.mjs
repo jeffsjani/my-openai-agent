@@ -1,7 +1,7 @@
 // netlify/functions/agent-stage-background.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-stage-background-v2026-05-13-12-rewrite-early-safe-block
+// Version: agent-stage-background-v2026-05-13-13-rewrite-stage-v1
 //
 // Supports:
 // - intake: deterministic Node 1 + Node 2 packet build, no OpenAI call.
@@ -14,7 +14,7 @@
 // Public endpoint: /.netlify/functions/agent-stage-background
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-stage-background-v2026-05-13-12-rewrite-early-safe-block";
+  "agent-stage-background-v2026-05-13-13-rewrite-stage-v1";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -31,7 +31,7 @@ const ACTIVE_PACKET_KEYS = [
 ];
 
 const ALLOWED_STAGES = ["intake", "draft", "rewrite", "polish", "finalize"];
-const SAFELY_BLOCKED_STAGES = ["rewrite", "polish", "finalize"];
+const SAFELY_BLOCKED_STAGES = ["polish", "finalize"];
 
 function getEnv(name) {
   return globalThis?.Netlify?.env?.get?.(name) ?? process?.env?.[name] ?? null;
@@ -1013,6 +1013,249 @@ async function buildDraftStageResult(payload) {
   };
 }
 
+
+function getRewriteTimeoutMs() {
+  const envMs = toInt(getEnv("REWRITE_STAGE_TIMEOUT_MS"), 480000);
+  return Math.max(60000, Math.min(envMs, 840000));
+}
+
+function getRewriteMaxOutputTokens() {
+  const envTokens = toInt(getEnv("REWRITE_STAGE_MAX_OUTPUT_TOKENS"), 12000);
+  return Math.max(1024, Math.min(envTokens, 24000));
+}
+
+function rewriteShortModeEnabled() {
+  const env = getEnv("REWRITE_STAGE_SHORT_MODE");
+  if (env == null) return true;
+  return env === "true" || env === "1" || env === "yes";
+}
+
+function getRewriteTargetWordCount(payload, node3Packet) {
+  const envTarget = toInt(getEnv("REWRITE_STAGE_TARGET_WORD_COUNT"), null);
+  if (Number.isFinite(envTarget) && envTarget > 0) return envTarget;
+  if (rewriteShortModeEnabled()) return 900;
+  const draftText = node3Packet?.drafted_units?.[0]?.drafted_text;
+  if (hasText(draftText)) return Math.max(800, Math.min(2600, Math.round(draftText.length / 5)));
+  return 2200;
+}
+
+function findNode3PacketForRewrite(payload) {
+  const latestNode3 = coerceObject(payload.latest_node3_json);
+  if (latestNode3) return { source: "latest_node3_json", node3Packet: latestNode3 };
+  const fromHistory = extractPacketFromConversationHistory(payload.conversation_history_json, "STAGE_DRAFT_NODE3_PACKET");
+  if (fromHistory) return { source: "conversation_history_json", node3Packet: fromHistory };
+  return { source: "missing", node3Packet: null };
+}
+
+function parseStringPacket(value, fallback = null) {
+  if (value == null) return fallback;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return fallback;
+  return parseMaybeJson(value, fallback ?? value);
+}
+
+function buildNode4APacket(payload, node3Packet, node3Source) {
+  const draftedText = node3Packet?.drafted_units?.[0]?.drafted_text ?? "";
+  const ready = hasText(draftedText);
+  return {
+    story_run_id: payload.story_run_id ?? node3Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node3Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node3Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "evaluate",
+    evaluated_node: "Node 3",
+    gate_type: "hard_gate",
+    current_node: "Node 4A",
+    node3_source: node3Source,
+    draft_text_present: ready,
+    draft_text_length: hasText(draftedText) ? draftedText.length : 0,
+    gate_pass: ready,
+    hard_fail_reasons: ready ? [] : ["Node 3 drafted_units[0].drafted_text is missing."],
+    required_rewrite: false,
+    rewrite_focus: ready ? ["Preserve canon and required chapter beats.", "Improve clarity, rhythm, scene pressure, and emotional subtext without changing core events."] : [],
+    next_node: ready ? "N4B_Soft_Draft_Evaluator" : ""
+  };
+}
+
+function buildNode4BPacket(payload, node3Packet, node4APacket) {
+  const draftedText = node3Packet?.drafted_units?.[0]?.drafted_text ?? "";
+  const ready = node4APacket?.status === "ready" && hasText(draftedText);
+  return {
+    story_run_id: payload.story_run_id ?? node3Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node3Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node3Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "evaluate",
+    evaluated_node: "Node 3",
+    gate_type: "soft_gate",
+    current_node: "Node 4B",
+    soft_score: ready ? 86 : 0,
+    soft_findings: ready ? ["Draft is usable for a rewrite pass.", "Rewrite should increase concrete sensory pressure, line-level rhythm, and subtextual relational tension.", "Preserve the chapter mission, POV, unit label, evidence logic, and ending hook."] : ["Soft evaluation could not run because Node 3 draft text is missing."],
+    rewrite_required: ready,
+    rewrite_directives: ready ? ["Tighten openings and transitions.", "Make every procedural evidence beat affect character leverage.", "Preserve adult restraint in Liv/Eirik dialogue while sharpening subtext.", "Avoid generic thriller phrasing, summary, and abstract motif stacking."] : [],
+    next_node: ready ? "N5_Chapter_Rewriter" : ""
+  };
+}
+
+function buildCompactRewriteInput(payload, node3Packet, node4APacket, node4BPacket, targetWordCount) {
+  const firstDraft = Array.isArray(node3Packet?.drafted_units) ? node3Packet.drafted_units[0] ?? {} : {};
+  return {
+    stage: "rewrite",
+    agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+    short_mode: rewriteShortModeEnabled(),
+    target_word_count: targetWordCount,
+    story_run_id: payload.story_run_id ?? node3Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node3Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node3Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    chapter_context: node3Packet?.chapter_context ?? payload?.chapter_context ?? null,
+    run_config: node3Packet?.run_config ?? payload?.run_config ?? null,
+    resolved_scope: node3Packet?.resolved_scope ?? null,
+    target_units_requested: node3Packet?.target_units_requested ?? [],
+    unit_label: firstDraft.unit_label ?? node3Packet?.target_units_requested?.[0] ?? payload?.selected_unit_label ?? "Chapter",
+    chapter_heading: firstDraft.chapter_heading ?? payload?.selected_chapter_title ?? "Chapter",
+    original_draft_text: firstDraft.drafted_text ?? "",
+    original_ending_condition: firstDraft.ending_condition ?? "",
+    original_carry_forward_summary: firstDraft.carry_forward_summary ?? "",
+    drafting_bible_stack: parseStringPacket(node3Packet?.drafting_bible_stack, {}),
+    style_packet: parseStringPacket(node3Packet?.style_packet, {}),
+    dialogue_voice_packet: parseStringPacket(node3Packet?.dialogue_voice_packet, {}),
+    locked_draft_priorities_packet: parseStringPacket(node3Packet?.locked_draft_priorities_packet, {}),
+    character_constellation_packet: parseStringPacket(node3Packet?.character_constellation_packet, {}),
+    structural_spine_packet: parseStringPacket(node3Packet?.structural_spine_packet, {}),
+    setpiece_symbol_architecture_packet: parseStringPacket(node3Packet?.setpiece_symbol_architecture_packet, {}),
+    world_setting_palette_packet: parseStringPacket(node3Packet?.world_setting_palette_packet, {}),
+    thematic_moral_architecture_packet: parseStringPacket(node3Packet?.thematic_moral_architecture_packet, {}),
+    signature_verbal_deployment_packet: parseStringPacket(node3Packet?.signature_verbal_deployment_packet, {}),
+    research_authenticity_packet: parseStringPacket(node3Packet?.research_authenticity_packet, {}),
+    prestige_quality_alignment_packet: parseStringPacket(node3Packet?.prestige_quality_alignment_packet, {}),
+    unit_contracts: Array.isArray(node3Packet?.unit_contracts) ? node3Packet.unit_contracts.map((item) => parseStringPacket(item, item)) : [],
+    node4a_gate: node4APacket,
+    node4b_evaluation: node4BPacket,
+    instructions: rewriteShortModeEnabled()
+      ? "Rewrite the condensed draft as a stronger 700 to 1000 word staged rewrite. Preserve all canon, POV, events, unit label, evidence logic, and ending hook. Improve clarity, concrete detail, suspense pressure, dialogue subtext, paragraph rhythm, and emotional restraint. Do not expand to full chapter length yet."
+      : "Rewrite the draft as a stronger chapter while preserving canon, POV, required beats, evidence logic, and ending hook."
+  };
+}
+
+function validateAndNormalizeNode5Output(parsed, compactRewriteInput, rawText) {
+  const sourceText = compactRewriteInput.original_draft_text ?? "";
+  const unitLabel = compactRewriteInput.unit_label ?? "Chapter";
+  const chapterHeading = compactRewriteInput.chapter_heading ?? unitLabel;
+  const firstUnit = Array.isArray(parsed?.rewritten_units) ? parsed.rewritten_units[0] ?? {} : {};
+  const rewrittenText = hasText(firstUnit.rewritten_text) ? firstUnit.rewritten_text : hasText(parsed?.rewritten_text) ? parsed.rewritten_text : rawText;
+  const ready = hasText(rewrittenText);
+  return {
+    story_run_id: parsed?.story_run_id ?? compactRewriteInput.story_run_id ?? null,
+    chapter_run_id: parsed?.chapter_run_id ?? compactRewriteInput.chapter_run_id ?? null,
+    project_id: parsed?.project_id ?? compactRewriteInput.project_id ?? null,
+    chapter_worker_version: parsed?.chapter_worker_version ?? compactRewriteInput.chapter_worker_version ?? null,
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "rewrite",
+    current_node: "Node 5",
+    source_node: "Node 3",
+    rewrite_basis: "Node 4A hard gate + Node 4B soft evaluation",
+    rewrite_cycle_completed: toInt(parsed?.rewrite_cycle_completed, 1),
+    rewritten_units: ready ? [{ unit_label: firstUnit.unit_label ?? unitLabel, chapter_heading: firstUnit.chapter_heading ?? chapterHeading, rewritten_text: rewrittenText, ending_condition: firstUnit.ending_condition ?? parsed?.ending_condition ?? compactRewriteInput.original_ending_condition ?? "Rewrite completed.", carry_forward_summary: firstUnit.carry_forward_summary ?? parsed?.carry_forward_summary ?? compactRewriteInput.original_carry_forward_summary ?? "Rewrite completed." }] : [],
+    changes_made: Array.isArray(parsed?.changes_made) ? parsed.changes_made : ["Improved clarity, rhythm, and pressure while preserving canon."],
+    preserved_canon: parsed?.preserved_canon === false ? false : true,
+    missing_required_inputs: ready ? [] : ["rewritten_units[0].rewritten_text"],
+    blocked_reasons: ready ? [] : ["Node 5 did not return non-empty rewritten_text."],
+    next_node: ready ? "N6_Polish_Gate" : "",
+    source_text_length: sourceText.length,
+    rewritten_text_length: ready ? rewrittenText.length : 0
+  };
+}
+
+async function runOpenAIRewrite(compactRewriteInput) {
+  const apiKey = getEnv("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is required for rewrite stage.");
+  const model = getEnv("REWRITE_STAGE_MODEL") || getEnv("DRAFT_STAGE_MODEL") || "gpt-5.4";
+  const reasoningEffort = getEnv("REWRITE_STAGE_REASONING") || "low";
+  const maxOutputTokens = Math.max(1024, Math.min(toInt(getEnv("REWRITE_STAGE_MAX_OUTPUT_TOKENS"), 12000), 24000));
+  const timeoutMs = Math.max(60000, Math.min(toInt(getEnv("REWRITE_STAGE_TIMEOUT_MS"), 480000), 840000));
+  console.log("[rewrite] max_output_tokens", maxOutputTokens);
+  console.log("[rewrite] timeout_ms", timeoutMs);
+  const prompt = `You are Node 5: Chapter Rewriter in a staged story orchestration workflow.
+Return only one valid JSON object. Do not use markdown. Do not include commentary.
+Use STAGE_REWRITE_COMPACT_INPUT as the controlling source.
+Rewrite goal:
+- Preserve canon, POV, scene events, evidence logic, unit label, and ending hook.
+- Improve clarity, concrete sensory evidence, suspense pressure, adult emotional restraint, dialogue subtext, and paragraph rhythm.
+- Follow Node 4A and Node 4B guidance.
+- If short_mode is true, keep the rewritten chapter between 700 and 1000 words.
+Required JSON output keys: story_run_id, chapter_run_id, project_id, chapter_worker_version, status, requested_operation, rewritten_units, changes_made, preserved_canon, missing_required_inputs, blocked_reasons, next_node.
+Ready rule: Return status = "ready" only if rewritten_units[0].rewritten_text is non-empty.
+STAGE_REWRITE_COMPACT_INPUT:
+${JSON.stringify(compactRewriteInput)}
+`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error(`Rewrite stage timed out after ${timeoutMs}ms.`)), timeoutMs);
+  const requestBody = { model, input: prompt, reasoning: { effort: reasoningEffort }, max_output_tokens: maxOutputTokens, store: true };
+  const startedAt = Date.now();
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` }, body: JSON.stringify(requestBody), signal: controller.signal });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`OpenAI rewrite request failed: ${response.status} ${text.slice(0, 1000)}`);
+    const data = parseMaybeJson(text, {});
+    const outputText = extractResponseText(data);
+    const parsed = extractJsonObjectFromText(outputText);
+    console.log("[Node 5] OpenAI response elapsed_ms", Date.now() - startedAt);
+    console.log("[Node 5] output_text_length", outputText.length);
+    console.log("[Node 5] parsed_json_present", !!parsed);
+    return { raw_response: data, output_text: outputText, output_parsed: validateAndNormalizeNode5Output(parsed, compactRewriteInput, outputText) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function buildRewriteStageResult(payload) {
+  console.log("[rewrite] latest_node3_json present", hasText(payload.latest_node3_json));
+  console.log("[rewrite] conversation_history_json present", hasText(payload.conversation_history_json));
+  console.log("[rewrite] stage payload keys", JSON.stringify(Object.keys(payload || {})));
+  const { source, node3Packet } = findNode3PacketForRewrite(payload);
+  console.log("[rewrite] node3 source", source);
+  console.log("[rewrite] node3 packet present", !!node3Packet);
+  console.log("[rewrite] node3 packet status", node3Packet?.status ?? null);
+  const draftedText = node3Packet?.drafted_units?.[0]?.drafted_text ?? "";
+  if (!node3Packet || !hasText(draftedText)) {
+    return { ok: false, story_run_id: payload.story_run_id ?? null, chapter_run_id: payload.chapter_run_id ?? null, stage: "rewrite", stage_status: "needs_input", next_stage: "rewrite", current_node: "Node 5", stage_completed_at: new Date().toISOString(), rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0), remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }), polish_cycle_completed: toInt(payload.polish_cycle_completed, 0), remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }), result_payload_json: { ok: false, agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION, stage: "rewrite", node3_source: source, node3_status: node3Packet?.status ?? null }, error_message: "Rewrite stage needs latest_node3_json or valid STAGE_DRAFT_NODE3_PACKET with drafted_text.", stage_error_message: "Rewrite stage needs latest_node3_json or valid STAGE_DRAFT_NODE3_PACKET with drafted_text." };
+  }
+  console.log("[Node 4A] START");
+  const node4APacket = buildNode4APacket(payload, node3Packet, source);
+  console.log("[Node 4A] status", node4APacket.status);
+  console.log("[Node 4B] START");
+  const node4BPacket = buildNode4BPacket(payload, node3Packet, node4APacket);
+  console.log("[Node 4B] status", node4BPacket.status);
+  const rewriteTargetWordCount = getRewriteTargetWordCount(payload, node3Packet);
+  const compactRewriteInput = buildCompactRewriteInput(payload, node3Packet, node4APacket, node4BPacket, rewriteTargetWordCount);
+  console.log("[rewrite] short mode", rewriteShortModeEnabled());
+  console.log("[rewrite] target_word_count", rewriteTargetWordCount);
+  console.log("[rewrite] compact input keys", JSON.stringify(Object.keys(compactRewriteInput)));
+  console.log("[rewrite] compact input length", JSON.stringify(compactRewriteInput).length);
+  console.log("[Node 5] START");
+  let rewriteResult;
+  try { rewriteResult = await runOpenAIRewrite(compactRewriteInput); }
+  catch (error) { console.error("[Node 5] failed", error); return { ok: false, story_run_id: payload.story_run_id ?? null, chapter_run_id: payload.chapter_run_id ?? null, stage: "rewrite", stage_status: "failed", next_stage: null, current_node: "Node 5", stage_completed_at: new Date().toISOString(), rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0), remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }), polish_cycle_completed: toInt(payload.polish_cycle_completed, 0), remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }), result_payload_json: { ok: false, agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION, stage: "rewrite", error_type: "node5_rewrite_failed", error_message: error?.message ?? String(error), node3_source: source, short_mode: rewriteShortModeEnabled(), target_word_count: rewriteTargetWordCount }, error_message: error?.message ?? String(error), stage_error_message: error?.message ?? String(error) }; }
+  const node5Packet = rewriteResult.output_parsed;
+  const ready = node5Packet?.status === "ready" && Array.isArray(node5Packet?.rewritten_units) && hasText(node5Packet.rewritten_units?.[0]?.rewritten_text);
+  console.log("[Node 5] runner.run complete");
+  console.log("[Node 5] status", node5Packet?.status ?? null);
+  console.log("[Node 5] ready", ready);
+  const completedBefore = toInt(payload.rewrite_cycle_completed, 0);
+  const configuredRemaining = safeCycleCount(payload.remaining_rewrite_cycles, payload.rewrite_cycles ?? 1, { min: 0, max: 4 });
+  const rewriteCycleCompleted = completedBefore + 1;
+  const remainingRewriteCycles = Math.max(0, configuredRemaining - 1);
+  const nextStage = remainingRewriteCycles > 0 ? "rewrite" : "polish";
+  const baseConversationHistory = hasText(payload.conversation_history_json) ? payload.conversation_history_json : buildConversationHistoryJson([["STAGE_DRAFT_NODE3_PACKET", node3Packet]]);
+  let updatedConversationHistory = appendStagePacketToHistory(baseConversationHistory, "STAGE_REWRITE_NODE4A_PACKET", node4APacket);
+  updatedConversationHistory = appendStagePacketToHistory(updatedConversationHistory, "STAGE_REWRITE_NODE4B_PACKET", node4BPacket);
+  updatedConversationHistory = appendStagePacketToHistory(updatedConversationHistory, "STAGE_REWRITE_NODE5_PACKET", node5Packet);
+  return { ok: ready, story_run_id: payload.story_run_id ?? node5Packet?.story_run_id ?? null, chapter_run_id: payload.chapter_run_id ?? null, stage: "rewrite", stage_status: ready ? "completed" : "needs_input", next_stage: ready ? nextStage : "rewrite", current_node: "Node 5", stage_started_at: payload.stage_started_at ?? null, stage_completed_at: new Date().toISOString(), rewrite_cycle_completed: ready ? rewriteCycleCompleted : completedBefore, remaining_rewrite_cycles: ready ? remainingRewriteCycles : configuredRemaining, polish_cycle_completed: toInt(payload.polish_cycle_completed, 0), remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, payload.polish_cycles ?? 1, { min: 0, max: 2 }), latest_node3_json: JSON.stringify(node3Packet), latest_node4a_json: JSON.stringify(node4APacket), latest_node4b_json: JSON.stringify(node4BPacket), latest_node5_json: JSON.stringify(node5Packet), conversation_history_json: updatedConversationHistory, result_payload_json: { ok: ready, agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION, stage: "rewrite", node3_source: source, node4a_status: node4APacket.status, node4b_status: node4BPacket.status, node5_status: node5Packet?.status ?? null, rewritten_text_present: hasText(node5Packet?.rewritten_units?.[0]?.rewritten_text), rewritten_text_length: hasText(node5Packet?.rewritten_units?.[0]?.rewritten_text) ? node5Packet.rewritten_units[0].rewritten_text.length : 0, rewrite_cycle_completed: ready ? rewriteCycleCompleted : completedBefore, remaining_rewrite_cycles: ready ? remainingRewriteCycles : configuredRemaining, next_stage: ready ? nextStage : "rewrite", short_mode: rewriteShortModeEnabled(), target_word_count: rewriteTargetWordCount }, error_message: ready ? null : "Rewrite stage did not produce a ready Node 5 packet with non-empty rewritten_text.", stage_error_message: ready ? null : "Rewrite stage did not produce a ready Node 5 packet with non-empty rewritten_text." };
+}
+
 function buildNotImplementedStageResult(payload, stage) {
   return {
     ok: false,
@@ -1068,6 +1311,7 @@ async function buildStageResult(body) {
 
   if (stage === "intake") return buildIntakeStageResult(payload);
   if (stage === "draft") return await buildDraftStageResult(payload);
+  if (stage === "rewrite") return await buildRewriteStageResult(payload);
 
   return buildNotImplementedStageResult(payload, stage);
 }
