@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-13-06-draft-node2-fallback
+// Version: agent-background-stage-v2026-05-13-07-draft-schema-string-packets
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -22,7 +22,7 @@ import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-13-06-draft-node2-fallback";
+  "agent-background-stage-v2026-05-13-07-draft-schema-string-packets";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -261,7 +261,10 @@ const RunConfigSchema = z.union([
   }),
   z.null()
 ]);
-const FlexibleObjectSchema = z.object({}).passthrough();
+// Structured Outputs rejects free-form object schemas whose additionalProperties do not have a concrete type.
+// For Node 3 output, packet-preservation fields are therefore returned as JSON strings.
+// Downstream stages can parse them when needed, while drafted_units remains strongly typed.
+const JsonStringSchema = z.string();
 
 const DraftedUnitSchema = z.object({
   unit_label: z.string(),
@@ -283,22 +286,22 @@ const Node3ChapterDrafterSchema = z.object({
   target_units_requested: z.array(z.string()),
   canon_basis: z.enum(["master_story_bible", "approved_draft", "target_text_only"]),
   active_bible_sections: z.array(z.number().int()),
-  drafting_bible_stack: FlexibleObjectSchema,
-  style_packet: FlexibleObjectSchema,
-  dialogue_voice_packet: FlexibleObjectSchema,
-  locked_draft_priorities_packet: FlexibleObjectSchema,
-  character_constellation_packet: FlexibleObjectSchema,
-  structural_spine_packet: FlexibleObjectSchema,
-  setpiece_symbol_architecture_packet: FlexibleObjectSchema,
-  world_setting_palette_packet: FlexibleObjectSchema,
-  thematic_moral_architecture_packet: FlexibleObjectSchema,
-  signature_verbal_deployment_packet: FlexibleObjectSchema,
-  research_authenticity_packet: FlexibleObjectSchema,
-  prestige_quality_alignment_packet: FlexibleObjectSchema,
-  unit_contracts: z.array(FlexibleObjectSchema),
+  drafting_bible_stack: JsonStringSchema,
+  style_packet: JsonStringSchema,
+  dialogue_voice_packet: JsonStringSchema,
+  locked_draft_priorities_packet: JsonStringSchema,
+  character_constellation_packet: JsonStringSchema,
+  structural_spine_packet: JsonStringSchema,
+  setpiece_symbol_architecture_packet: JsonStringSchema,
+  world_setting_palette_packet: JsonStringSchema,
+  thematic_moral_architecture_packet: JsonStringSchema,
+  signature_verbal_deployment_packet: JsonStringSchema,
+  research_authenticity_packet: JsonStringSchema,
+  prestige_quality_alignment_packet: JsonStringSchema,
+  unit_contracts: z.array(JsonStringSchema),
   store_packet_status: z.enum(["preserved", "rebuilt"]),
   drafted_units: z.array(DraftedUnitSchema),
-  downstream_store_requests: FlexibleObjectSchema,
+  downstream_store_requests: JsonStringSchema,
   missing_required_inputs: z.array(z.string()),
   blocked_reasons: z.array(z.string()),
   next_node: z.enum(["N4A_Upstream_Draft_Gate", ""])
@@ -324,6 +327,9 @@ The incoming payload is source input only.
 Do not echo it back.
 Do not return the input shape.
 Return only the JSON object defined by the active schema.
+
+Important schema requirement:
+For drafting_bible_stack, all *_packet fields, downstream_store_requests, and each unit_contracts item, return compact JSON strings, not nested JSON objects. For example, return style_packet as JSON.stringify(style_packet_object). The drafted_units field must remain a normal JSON array of objects.
 
 Core job
 
