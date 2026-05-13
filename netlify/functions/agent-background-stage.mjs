@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-13-08-draft-timeout-shortmode
+// Version: agent-background-stage-v2026-05-13-09-draft-max-tokens-fix
 //
 // Supports:
 // - intake: deterministic Node 1 + Node 2 packet build, no OpenAI call.
@@ -9,7 +9,7 @@
 // - rewrite / polish / finalize: intentionally blocked until implemented.
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-13-08-draft-timeout-shortmode";
+  "agent-background-stage-v2026-05-13-09-draft-max-tokens-fix";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -52,6 +52,7 @@ function hasText(value) {
 }
 
 function toInt(value, fallback = 0) {
+  if (value == null || value === "") return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
@@ -507,6 +508,12 @@ function getDraftTimeoutMs() {
   return Math.max(60000, Math.min(envMs, 840000));
 }
 
+function getDraftMaxOutputTokens() {
+  const envTokens = toInt(getEnv("DRAFT_STAGE_MAX_OUTPUT_TOKENS"), 12000);
+  // OpenAI requires max_output_tokens >= 16. Keep a safe range for short-mode drafts.
+  return Math.max(1024, Math.min(envTokens, 24000));
+}
+
 function compactObjectForDraft(obj) {
   if (!obj || typeof obj !== "object") return obj;
   return JSON.parse(JSON.stringify(obj));
@@ -738,8 +745,11 @@ async function runOpenAIDraft(compactDraftInput) {
 
   const model = getEnv("DRAFT_STAGE_MODEL") || "gpt-5.4";
   const reasoningEffort = getEnv("DRAFT_STAGE_REASONING") || "low";
-  const maxOutputTokens = toInt(getEnv("DRAFT_STAGE_MAX_OUTPUT_TOKENS"), 12000);
+  const maxOutputTokens = getDraftMaxOutputTokens();
   const timeoutMs = getDraftTimeoutMs();
+
+  console.log("[draft] max_output_tokens", maxOutputTokens);
+  console.log("[draft] timeout_ms", timeoutMs);
 
   const prompt = `You are Node 3: Chapter Drafter in a staged story orchestration workflow.
 
