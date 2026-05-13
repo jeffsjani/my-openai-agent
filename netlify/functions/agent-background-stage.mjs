@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-13-05-draft-node3-schema-fix
+// Version: agent-background-stage-v2026-05-13-06-draft-node2-fallback
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -22,7 +22,7 @@ import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-13-05-draft-node3-schema-fix";
+  "agent-background-stage-v2026-05-13-06-draft-node2-fallback";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -525,24 +525,78 @@ function extractPacketFromConversationHistory(conversationHistoryJson, marker) {
   return null;
 }
 
+function getLatestNode1Packet(payload, unitLabelForFallback = null) {
+  const direct = parseStageJson(payload?.latest_node1_json, null);
+  if (direct && typeof direct === "object") {
+    console.log("[draft] node1 source", "latest_node1_json");
+    return direct;
+  }
+
+  const fromHistory = extractPacketFromConversationHistory(
+    payload?.conversation_history_json,
+    "STAGE_INTAKE_NODE1_PACKET"
+  );
+  if (fromHistory && typeof fromHistory === "object") {
+    console.log("[draft] node1 source", "conversation_history_json");
+    return fromHistory;
+  }
+
+  const unitContracts = normalizeUnitContracts(payload);
+  const unitLabel = firstNonEmpty(
+    unitContracts?.[0]?.unit_label,
+    payload?.selected_unit_label,
+    payload?.current_unit_label,
+    payload?.chapter_context?.unit_label,
+    unitLabelForFallback,
+    "Chapter"
+  ) ?? "Chapter";
+
+  const synthesized = buildNode1Packet(payload, unitLabel);
+  console.log("[draft] node1 source", "synthesized_from_stage_payload");
+  return synthesized;
+}
+
 function getLatestNode2Packet(payload) {
   const direct = parseStageJson(payload?.latest_node2_json, null);
-  if (direct && typeof direct === "object") return direct;
+  if (direct && typeof direct === "object") {
+    console.log("[draft] node2 source", "latest_node2_json");
+    return direct;
+  }
+
   const fromHistory = extractPacketFromConversationHistory(
     payload?.conversation_history_json,
     "STAGE_INTAKE_NODE2_PACKET"
   );
-  if (fromHistory && typeof fromHistory === "object") return fromHistory;
+  if (fromHistory && typeof fromHistory === "object") {
+    console.log("[draft] node2 source", "conversation_history_json");
+    return fromHistory;
+  }
+
+  // Robust fallback: /execute-stage's stage_payload includes the full original request_payload_json,
+  // active_stack_override, drafting_bible_stack, and unit_contracts. If the individual latest_node2_json
+  // field did not persist through BuildShip, rebuild the Node 2 packet deterministically from the payload.
+  const node1Packet = getLatestNode1Packet(payload);
+  const synthesized = buildNode2Packet(payload, node1Packet);
+  if (synthesized && typeof synthesized === "object") {
+    console.log("[draft] node2 source", "synthesized_from_stage_payload");
+    console.log("[draft] synthesized node2 status", synthesized.status ?? null);
+    console.log("[draft] synthesized node2 missing inputs", JSON.stringify(synthesized.missing_required_inputs ?? []));
+    return synthesized;
+  }
+
+  console.log("[draft] node2 source", "missing");
   return null;
 }
 
 function normalizeConversationHistoryForDraft(payload, node2Packet) {
   let history = parseConversationHistory(payload?.conversation_history_json);
 
-  const hasNode2Marker = JSON.stringify(history).includes("STAGE_INTAKE_NODE2_PACKET");
+  const historyString = JSON.stringify(history);
+  const hasNode1Marker = historyString.includes("STAGE_INTAKE_NODE1_PACKET");
+  const hasNode2Marker = historyString.includes("STAGE_INTAKE_NODE2_PACKET");
 
-  if (history.length === 0 && payload?.latest_node1_json) {
-    const node1Packet = parseStageJson(payload.latest_node1_json, null);
+  if (!hasNode1Marker) {
+    const node1Packet = getLatestNode1Packet(payload, node2Packet?.target_units_requested?.[0]);
     if (node1Packet) {
       history = appendStagePacketToHistory(history, "STAGE_INTAKE_NODE1_PACKET", node1Packet);
     }
@@ -629,7 +683,13 @@ async function runNode3Draft(node2Packet, conversationHistory) {
 }
 
 async function buildDraftStageResult(payload) {
+  console.log("[draft] latest_node2_json present", !!payload?.latest_node2_json);
+  console.log("[draft] conversation_history_json present", !!payload?.conversation_history_json);
+  console.log("[draft] stage payload keys", JSON.stringify(Object.keys(payload || {})));
+
   const node2Packet = getLatestNode2Packet(payload);
+  console.log("[draft] node2 packet present", !!node2Packet);
+  console.log("[draft] node2 packet status", node2Packet?.status ?? null);
 
   if (!node2Packet || typeof node2Packet !== "object") {
     return buildNeedsInputStageResult(
