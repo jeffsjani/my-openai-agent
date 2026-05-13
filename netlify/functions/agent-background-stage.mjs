@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-13-04-draft-node3
+// Version: agent-background-stage-v2026-05-13-05-draft-node3-schema-fix
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -22,7 +22,7 @@ import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
 import { z } from "zod";
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-13-04-draft-node3";
+  "agent-background-stage-v2026-05-13-05-draft-node3-schema-fix";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -261,6 +261,8 @@ const RunConfigSchema = z.union([
   }),
   z.null()
 ]);
+const FlexibleObjectSchema = z.object({}).passthrough();
+
 const DraftedUnitSchema = z.object({
   unit_label: z.string(),
   chapter_heading: z.string(),
@@ -281,22 +283,22 @@ const Node3ChapterDrafterSchema = z.object({
   target_units_requested: z.array(z.string()),
   canon_basis: z.enum(["master_story_bible", "approved_draft", "target_text_only"]),
   active_bible_sections: z.array(z.number().int()),
-  drafting_bible_stack: z.any(),
-  style_packet: z.any(),
-  dialogue_voice_packet: z.any(),
-  locked_draft_priorities_packet: z.any(),
-  character_constellation_packet: z.any(),
-  structural_spine_packet: z.any(),
-  setpiece_symbol_architecture_packet: z.any(),
-  world_setting_palette_packet: z.any(),
-  thematic_moral_architecture_packet: z.any(),
-  signature_verbal_deployment_packet: z.any(),
-  research_authenticity_packet: z.any(),
-  prestige_quality_alignment_packet: z.any(),
-  unit_contracts: z.array(z.any()),
+  drafting_bible_stack: FlexibleObjectSchema,
+  style_packet: FlexibleObjectSchema,
+  dialogue_voice_packet: FlexibleObjectSchema,
+  locked_draft_priorities_packet: FlexibleObjectSchema,
+  character_constellation_packet: FlexibleObjectSchema,
+  structural_spine_packet: FlexibleObjectSchema,
+  setpiece_symbol_architecture_packet: FlexibleObjectSchema,
+  world_setting_palette_packet: FlexibleObjectSchema,
+  thematic_moral_architecture_packet: FlexibleObjectSchema,
+  signature_verbal_deployment_packet: FlexibleObjectSchema,
+  research_authenticity_packet: FlexibleObjectSchema,
+  prestige_quality_alignment_packet: FlexibleObjectSchema,
+  unit_contracts: z.array(FlexibleObjectSchema),
   store_packet_status: z.enum(["preserved", "rebuilt"]),
   drafted_units: z.array(DraftedUnitSchema),
-  downstream_store_requests: z.any(),
+  downstream_store_requests: FlexibleObjectSchema,
   missing_required_inputs: z.array(z.string()),
   blocked_reasons: z.array(z.string()),
   next_node: z.enum(["N4A_Upstream_Draft_Gate", ""])
