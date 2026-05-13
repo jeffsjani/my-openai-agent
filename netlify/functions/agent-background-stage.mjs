@@ -1,7 +1,7 @@
 // netlify/functions/agent-background-stage.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-background-stage-v2026-05-12-03-intake-stage-payload-unwrap
+// Version: agent-background-stage-v2026-05-13-04-draft-node3
 //
 // Purpose:
 // - Receives one stage payload from BuildShip /story-run/execute-stage.
@@ -18,8 +18,11 @@
 // Optional env vars:
 // - AGENT_STAGE_SHARED_SECRET=<stage-specific override; falls back to AGENT_SHARED_SECRET>
 
+import { fileSearchTool, Agent, Runner, withTrace } from "@openai/agents";
+import { z } from "zod";
+
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-background-stage-v2026-05-12-03-intake-stage-payload-unwrap";
+  "agent-background-stage-v2026-05-13-04-draft-node3";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -225,6 +228,473 @@ function buildDefaultDownstreamStoreRequests() {
     }
   };
 }
+
+
+// -----------------------------------------------------------------------------
+// Draft stage / Node 3 support
+// Version: stage-draft-node3-v2026-05-13-04
+// Purpose:
+// - Reuse the proven Node 3 Chapter Drafter agent as a single-stage worker step.
+// - Input comes from latest_node2_json or STAGE_INTAKE_NODE2_PACKET in conversation_history_json.
+// - Output is saved as latest_node3_json and appended to conversation_history_json.
+// -----------------------------------------------------------------------------
+
+const NullableString = z.union([z.string(), z.null()]);
+const NullableInt = z.union([z.number().int(), z.null()]);
+const NullableFlexible = z.union([z.string(), z.number().int(), z.null()]);
+const ChapterContextSchema = z.union([
+  z.object({
+    chapter_number: NullableInt,
+    chapter_title: NullableString,
+    unit_label: NullableString,
+    prior_chapter_summary: NullableString,
+    prior_chapter_end_snippet: NullableString,
+    prior_chapter_ending_condition: NullableString
+  }),
+  z.null()
+]);
+const RunConfigSchema = z.union([
+  z.object({
+    rewrite_cycles: NullableInt,
+    polish_cycles: NullableInt,
+    mode: NullableString
+  }),
+  z.null()
+]);
+const DraftedUnitSchema = z.object({
+  unit_label: z.string(),
+  chapter_heading: z.string(),
+  drafted_text: z.string(),
+  ending_condition: z.string(),
+  carry_forward_summary: z.string()
+});
+
+const Node3ChapterDrafterSchema = z.object({
+  story_run_id: NullableString,
+  project_id: NullableString,
+  chapter_worker_version: NullableString,
+  chapter_context: ChapterContextSchema,
+  run_config: RunConfigSchema,
+  status: z.enum(["ready", "needs_input", "blocked"]),
+  requested_operation: z.enum(["draft"]),
+  resolved_scope: z.string(),
+  target_units_requested: z.array(z.string()),
+  canon_basis: z.enum(["master_story_bible", "approved_draft", "target_text_only"]),
+  active_bible_sections: z.array(z.number().int()),
+  drafting_bible_stack: z.any(),
+  style_packet: z.any(),
+  dialogue_voice_packet: z.any(),
+  locked_draft_priorities_packet: z.any(),
+  character_constellation_packet: z.any(),
+  structural_spine_packet: z.any(),
+  setpiece_symbol_architecture_packet: z.any(),
+  world_setting_palette_packet: z.any(),
+  thematic_moral_architecture_packet: z.any(),
+  signature_verbal_deployment_packet: z.any(),
+  research_authenticity_packet: z.any(),
+  prestige_quality_alignment_packet: z.any(),
+  unit_contracts: z.array(z.any()),
+  store_packet_status: z.enum(["preserved", "rebuilt"]),
+  drafted_units: z.array(DraftedUnitSchema),
+  downstream_store_requests: z.any(),
+  missing_required_inputs: z.array(z.string()),
+  blocked_reasons: z.array(z.string()),
+  next_node: z.enum(["N4A_Upstream_Draft_Gate", ""])
+});
+
+const fileSearch = fileSearchTool([
+  getEnv("OPENAI_VECTOR_STORE_ID") ||
+  getEnv("VECTOR_STORE_ID") ||
+  "vs_69d18c7ac02881918e7c7b5b81c31e62"
+]);
+
+const node3ChapterDrafter = new Agent({
+  name: "Node 3 — Chapter Drafter",
+  instructions: `You are Node 3: Chapter Drafter with Story Run Metadata Preservation.
+
+You draft prose.
+You do not evaluate, score, explain, or polish.
+You do not self-grade.
+You do not generate rewrite directions.
+Those jobs belong downstream.
+
+The incoming payload is source input only.
+Do not echo it back.
+Do not return the input shape.
+Return only the JSON object defined by the active schema.
+
+Core job
+
+Draft chapter prose using the full active drafting-stack packet set provided by Node 2 while preserving orchestration metadata from upstream.
+
+This node must actively use the full stack:
+1. Section 12 / unit_contracts
+2. Section 3 / style_packet
+3. Section 15 / dialogue_voice_packet
+4. Section 19 / locked_draft_priorities_packet
+5. Section 7 / character_constellation_packet
+6. Section 11 / structural_spine_packet
+7. Section 13 / setpiece_symbol_architecture_packet
+8. Section 8 / world_setting_palette_packet
+9. Section 9 / thematic_moral_architecture_packet
+10. Section 21 / signature_verbal_deployment_packet
+11. Section 18 / research_authenticity_packet
+12. Section 4 / prestige_quality_alignment_packet
+
+Rules
+
+1. Operation guard
+This node is only for drafting.
+- requested_operation must be "draft"
+- if requested_operation is anything else, return status = "blocked"
+
+2. Preserve orchestration metadata from upstream
+If present upstream, preserve exactly:
+- story_run_id
+- project_id
+- chapter_worker_version
+- chapter_context
+- run_config
+If absent, return null for the missing field.
+
+3. Required source use
+All active stack packets are mandatory. They are not optional reference materials.
+Use unit_contracts as the controlling chapter mission. Use style_packet, dialogue_voice_packet, locked_draft_priorities_packet, character_constellation_packet, structural_spine_packet, setpiece_symbol_architecture_packet, world_setting_palette_packet, thematic_moral_architecture_packet, signature_verbal_deployment_packet, research_authenticity_packet, and prestige_quality_alignment_packet actively.
+
+4. DraftingHouseRules support
+Use DraftingHouseRules from VeritasStudioStore through File Search when available. Use it as active drafting law, especially for concrete-before-concept, paragraph architecture, Kindle readability, evidence before interpretation, clear blocking, suspense pulse, emotional voltage, no em dashes, and repetition control.
+
+5. Pass-through rule
+Preserve these exactly as received from the Node 2 packet:
+- story_run_id
+- project_id
+- chapter_worker_version
+- chapter_context
+- run_config
+- resolved_scope
+- target_units_requested
+- canon_basis
+- active_bible_sections
+- drafting_bible_stack
+- every active-stack packet
+- unit_contracts
+- downstream_store_requests
+
+6. Store packet rule
+If downstream_store_requests is usable, preserve it exactly and set store_packet_status = "preserved". If it is missing or malformed, rebuild the default store packet and set store_packet_status = "rebuilt".
+
+7. Scope and heading rules
+Draft only the target_units_requested. Preserve exact unit labels. For a label like "Chapter 12 - After the Storm", chapter_heading must be exactly:
+Chapter 12
+After the Storm
+
+8. Drafting behavior
+For each unit:
+- start under pressure
+- materially change the situation
+- keep POV clean
+- keep prose concrete, controlled, immersive, and emotionally alive
+- keep dialogue pressure-bearing and differentiated
+- keep blocking trackable
+- preserve locked priorities, constellation truth, structural spine, set-piece design, palette, thematic architecture, signature verbal identity, authenticity, and prestige quality
+- end on a changed condition with forward pressure
+
+9. drafted_units content rule
+For each drafted_units item, return exactly:
+- unit_label
+- chapter_heading
+- drafted_text
+- ending_condition
+- carry_forward_summary
+
+10. Ready rule
+Return status = "ready" only when:
+- requested_operation = "draft"
+- all active stack packets are present
+- unit_contracts are present
+- drafted prose is produced for every target unit
+- exact target labels are preserved
+- store_packet_status is present
+
+11. Missing input rule
+Return status = "needs_input" only when any required active-stack packet is missing or unusable.
+
+12. Next node routing
+If status = "ready", set next_node = "N4A_Upstream_Draft_Gate".
+If status = "needs_input" or "blocked", set next_node = "".
+
+13. Output rules
+Return exactly one JSON object with these top-level keys in this exact order:
+1. story_run_id
+2. project_id
+3. chapter_worker_version
+4. chapter_context
+5. run_config
+6. status
+7. requested_operation
+8. resolved_scope
+9. target_units_requested
+10. canon_basis
+11. active_bible_sections
+12. drafting_bible_stack
+13. style_packet
+14. dialogue_voice_packet
+15. locked_draft_priorities_packet
+16. character_constellation_packet
+17. structural_spine_packet
+18. setpiece_symbol_architecture_packet
+19. world_setting_palette_packet
+20. thematic_moral_architecture_packet
+21. signature_verbal_deployment_packet
+22. research_authenticity_packet
+23. prestige_quality_alignment_packet
+24. unit_contracts
+25. store_packet_status
+26. drafted_units
+27. downstream_store_requests
+28. missing_required_inputs
+29. blocked_reasons
+30. next_node
+
+Do not include commentary.
+Do not include extra keys.
+Do not restate the input.
+Do not output malformed JSON.
+Every key must have a value.`,
+  model: getEnv("STAGE_DRAFT_MODEL") || "gpt-5.4",
+  tools: [fileSearch],
+  outputType: Node3ChapterDrafterSchema,
+  modelSettings: {
+    reasoning: {
+      effort: getEnv("STAGE_DRAFT_REASONING_EFFORT") || "high",
+      summary: "auto"
+    },
+    store: true
+  }
+});
+
+function parseStageJson(value, fallback = null) {
+  if (value == null) return fallback;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return fallback;
+  }
+}
+
+function parseConversationHistory(value) {
+  const parsed = parseStageJson(value, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function appendStagePacketToHistory(history, label, packet) {
+  const next = Array.isArray(history) ? [...history] : [];
+  next.push({
+    role: "user",
+    content: [
+      {
+        type: "input_text",
+        text: `${label}\n${JSON.stringify(packet)}`
+      }
+    ]
+  });
+  return next;
+}
+
+function extractPacketFromConversationHistory(conversationHistoryJson, marker) {
+  const history = parseConversationHistory(conversationHistoryJson);
+  for (const item of history) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const part of content) {
+      const text = typeof part?.text === "string" ? part.text : "";
+      if (!text.includes(marker)) continue;
+      const afterMarker = text.slice(text.indexOf(marker) + marker.length).trim();
+      const firstJsonBrace = afterMarker.indexOf("{");
+      if (firstJsonBrace < 0) continue;
+      const jsonText = afterMarker.slice(firstJsonBrace).trim();
+      const parsed = parseStageJson(jsonText, null);
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  }
+  return null;
+}
+
+function getLatestNode2Packet(payload) {
+  const direct = parseStageJson(payload?.latest_node2_json, null);
+  if (direct && typeof direct === "object") return direct;
+  const fromHistory = extractPacketFromConversationHistory(
+    payload?.conversation_history_json,
+    "STAGE_INTAKE_NODE2_PACKET"
+  );
+  if (fromHistory && typeof fromHistory === "object") return fromHistory;
+  return null;
+}
+
+function normalizeConversationHistoryForDraft(payload, node2Packet) {
+  let history = parseConversationHistory(payload?.conversation_history_json);
+
+  const hasNode2Marker = JSON.stringify(history).includes("STAGE_INTAKE_NODE2_PACKET");
+
+  if (history.length === 0 && payload?.latest_node1_json) {
+    const node1Packet = parseStageJson(payload.latest_node1_json, null);
+    if (node1Packet) {
+      history = appendStagePacketToHistory(history, "STAGE_INTAKE_NODE1_PACKET", node1Packet);
+    }
+  }
+
+  if (!hasNode2Marker && node2Packet) {
+    history = appendStagePacketToHistory(history, "STAGE_INTAKE_NODE2_PACKET", node2Packet);
+  }
+
+  return history;
+}
+
+function buildNeedsInputStageResult(payload, stage, message) {
+  return {
+    ok: false,
+    story_run_id: payload.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    stage,
+    stage_status: "needs_input",
+    next_stage: stage,
+    current_node: `stage:${stage}:needs_input`,
+    stage_started_at: payload.stage_started_at ?? null,
+    stage_completed_at: new Date().toISOString(),
+    rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0),
+    remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+    polish_cycle_completed: toInt(payload.polish_cycle_completed, 0),
+    remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }),
+    result_payload_json: {
+      ok: false,
+      agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+      stage,
+      error_type: "stage_needs_input",
+      message
+    },
+    error_message: message,
+    stage_error_message: message
+  };
+}
+
+async function runNode3Draft(node2Packet, conversationHistory) {
+  const runner = new Runner({
+    traceMetadata: {
+      __trace_source__: "agent-background-stage",
+      workflow_id: "story-orchestrator-stage-draft-node3"
+    }
+  });
+
+  return await withTrace("STORY ORCHESTRATOR STAGE — DRAFT / NODE 3", async () => {
+    const startedAt = Date.now();
+    console.log("[Node 3] START");
+
+    const node3InputHistory = appendStagePacketToHistory(
+      conversationHistory,
+      "STAGE_DRAFT_NODE3_CONTROL_PACKET",
+      {
+        requested_stage: "draft",
+        source_node: "STAGE_INTAKE_NODE2_PACKET",
+        node2_status: node2Packet?.status ?? null,
+        story_run_id: node2Packet?.story_run_id ?? null,
+        target_units_requested: node2Packet?.target_units_requested ?? []
+      }
+    );
+
+    const resultTemp = await runner.run(node3ChapterDrafter, node3InputHistory);
+
+    const elapsedMs = Date.now() - startedAt;
+    console.log(`[Node 3] runner.run complete in ${elapsedMs}ms`);
+    console.log(`[Node 3] newItems=${resultTemp.newItems?.length ?? 0}`);
+
+    if (!resultTemp.finalOutput) {
+      throw new Error("Node 3 finalOutput missing");
+    }
+
+    console.log("[Node 3] END");
+    console.log("[Node 3] status", resultTemp.finalOutput?.status ?? null);
+
+    return {
+      output_text: JSON.stringify(resultTemp.finalOutput),
+      output_parsed: resultTemp.finalOutput,
+      new_items: resultTemp.newItems?.map((item) => item.rawItem) ?? [],
+      elapsed_ms: elapsedMs
+    };
+  });
+}
+
+async function buildDraftStageResult(payload) {
+  const node2Packet = getLatestNode2Packet(payload);
+
+  if (!node2Packet || typeof node2Packet !== "object") {
+    return buildNeedsInputStageResult(
+      payload,
+      "draft",
+      "Draft stage needs latest_node2_json or a valid STAGE_INTAKE_NODE2_PACKET in conversation_history_json."
+    );
+  }
+
+  if (node2Packet.status !== "ready") {
+    return buildNeedsInputStageResult(
+      payload,
+      "draft",
+      `Draft stage needs a ready Node 2 packet. Received status: ${node2Packet.status ?? "unknown"}.`
+    );
+  }
+
+  const missingPackets = ACTIVE_PACKET_KEYS.filter((key) => !node2Packet[key]);
+  if (missingPackets.length > 0 || !Array.isArray(node2Packet.unit_contracts) || node2Packet.unit_contracts.length === 0) {
+    return buildNeedsInputStageResult(
+      payload,
+      "draft",
+      `Draft stage missing required Node 2 packet fields: ${[...missingPackets, ...(!Array.isArray(node2Packet.unit_contracts) || node2Packet.unit_contracts.length === 0 ? ["unit_contracts"] : [])].join("; ")}.`
+    );
+  }
+
+  const conversationHistory = normalizeConversationHistoryForDraft(payload, node2Packet);
+  const node3Result = await runNode3Draft(node2Packet, conversationHistory);
+  const node3Packet = node3Result.output_parsed;
+
+  const ready = node3Packet?.status === "ready";
+  const updatedHistory = appendStagePacketToHistory(
+    [...conversationHistory, ...node3Result.new_items],
+    "STAGE_DRAFT_NODE3_PACKET",
+    node3Packet
+  );
+
+  return {
+    ok: ready,
+    story_run_id: payload.story_run_id ?? node3Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    stage: "draft",
+    stage_status: ready ? "completed" : (node3Packet?.status === "blocked" ? "blocked" : "needs_input"),
+    next_stage: ready ? "rewrite" : "draft",
+    current_node: "Node 3",
+    stage_started_at: payload.stage_started_at ?? null,
+    stage_completed_at: new Date().toISOString(),
+    rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0),
+    remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles ?? payload.rewrite_cycles, 1, { min: 0, max: 4 }),
+    polish_cycle_completed: toInt(payload.polish_cycle_completed, 0),
+    remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles ?? payload.polish_cycles, 1, { min: 0, max: 2 }),
+    latest_node3_json: JSON.stringify(node3Packet),
+    conversation_history_json: JSON.stringify(updatedHistory),
+    result_payload_json: {
+      ok: ready,
+      agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+      stage: "draft",
+      node3_status: node3Packet?.status ?? null,
+      node3_next_node: node3Packet?.next_node ?? null,
+      drafted_units_count: Array.isArray(node3Packet?.drafted_units) ? node3Packet.drafted_units.length : 0,
+      elapsed_ms: node3Result.elapsed_ms
+    },
+    error_message: ready ? null : `Draft stage did not complete: ${node3Packet?.status ?? "unknown"}`,
+    stage_error_message: ready ? null : `Draft stage did not complete: ${node3Packet?.status ?? "unknown"}`
+  };
+}
+
 
 function normalizeUnitContract(payload) {
   const direct = coerceObject(payload?.unit_contract_override) ?? coerceObject(payload?.unit_contract) ?? coerceObject(payload?.chapter_unit_contract) ?? null;
@@ -469,7 +939,7 @@ function unwrapStagePayload(body) {
   return body;
 }
 
-function buildStageResult(body) {
+async function buildStageResult(body) {
   const payload = mergeEmbeddedRequestPayload(body);
   const stage = safeString(payload.stage, "intake");
   if (!ALLOWED_STAGES.includes(stage)) {
@@ -488,6 +958,7 @@ function buildStageResult(body) {
     };
   }
   if (stage === "intake") return buildIntakeStageResult(payload);
+  if (stage === "draft") return await buildDraftStageResult(payload);
   return buildNotImplementedStageResult(payload, stage);
 }
 
@@ -620,7 +1091,7 @@ export default async (req, context) => {
       return json(failurePayload, 400);
     }
 
-    const stageResult = buildStageResult(effectiveBody);
+    const stageResult = await buildStageResult(effectiveBody);
     const callbackResult = await postStageComplete(stageResult);
     return json({
       accepted: true,
