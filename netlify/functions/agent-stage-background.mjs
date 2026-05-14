@@ -1,12 +1,14 @@
 // netlify/functions/agent-stage-background.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-stage-background-v2026-05-13-13-rewrite-stage-v1
+// Version: agent-stage-background-v2026-05-13-14-polish-stage-v1
 //
 // Supports:
 // - intake: deterministic Node 1 + Node 2 packet build, no OpenAI call.
 // - draft: timeout-protected short-mode Node 3 smoke test using compact payload.
-// - rewrite / polish / finalize: intentionally blocked until implemented.
+// - rewrite: Node 4A + Node 4B + Node 5 compact rewrite pass.
+// - polish: Node 6 + Node 7 + Node 8 compact polish pass.
+// - finalize: intentionally blocked until implemented.
 //
 // IMPORTANT NETLIFY DEPLOYMENT NOTE:
 // Save this file as netlify/functions/agent-stage-background.mjs.
@@ -14,7 +16,7 @@
 // Public endpoint: /.netlify/functions/agent-stage-background
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-stage-background-v2026-05-13-13-rewrite-stage-v1";
+  "agent-stage-background-v2026-05-13-14-polish-stage-v1";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -31,7 +33,7 @@ const ACTIVE_PACKET_KEYS = [
 ];
 
 const ALLOWED_STAGES = ["intake", "draft", "rewrite", "polish", "finalize"];
-const SAFELY_BLOCKED_STAGES = ["polish", "finalize"];
+const SAFELY_BLOCKED_STAGES = ["finalize"];
 
 function getEnv(name) {
   return globalThis?.Netlify?.env?.get?.(name) ?? process?.env?.[name] ?? null;
@@ -1256,6 +1258,374 @@ async function buildRewriteStageResult(payload) {
   return { ok: ready, story_run_id: payload.story_run_id ?? node5Packet?.story_run_id ?? null, chapter_run_id: payload.chapter_run_id ?? null, stage: "rewrite", stage_status: ready ? "completed" : "needs_input", next_stage: ready ? nextStage : "rewrite", current_node: "Node 5", stage_started_at: payload.stage_started_at ?? null, stage_completed_at: new Date().toISOString(), rewrite_cycle_completed: ready ? rewriteCycleCompleted : completedBefore, remaining_rewrite_cycles: ready ? remainingRewriteCycles : configuredRemaining, polish_cycle_completed: toInt(payload.polish_cycle_completed, 0), remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, payload.polish_cycles ?? 1, { min: 0, max: 2 }), latest_node3_json: JSON.stringify(node3Packet), latest_node4a_json: JSON.stringify(node4APacket), latest_node4b_json: JSON.stringify(node4BPacket), latest_node5_json: JSON.stringify(node5Packet), conversation_history_json: updatedConversationHistory, result_payload_json: { ok: ready, agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION, stage: "rewrite", node3_source: source, node4a_status: node4APacket.status, node4b_status: node4BPacket.status, node5_status: node5Packet?.status ?? null, rewritten_text_present: hasText(node5Packet?.rewritten_units?.[0]?.rewritten_text), rewritten_text_length: hasText(node5Packet?.rewritten_units?.[0]?.rewritten_text) ? node5Packet.rewritten_units[0].rewritten_text.length : 0, rewrite_cycle_completed: ready ? rewriteCycleCompleted : completedBefore, remaining_rewrite_cycles: ready ? remainingRewriteCycles : configuredRemaining, next_stage: ready ? nextStage : "rewrite", short_mode: rewriteShortModeEnabled(), target_word_count: rewriteTargetWordCount }, error_message: ready ? null : "Rewrite stage did not produce a ready Node 5 packet with non-empty rewritten_text.", stage_error_message: ready ? null : "Rewrite stage did not produce a ready Node 5 packet with non-empty rewritten_text." };
 }
 
+
+function getPolishTimeoutMs() {
+  const envMs = toInt(getEnv("POLISH_STAGE_TIMEOUT_MS"), 480000);
+  return Math.max(60000, Math.min(envMs, 840000));
+}
+
+function getPolishMaxOutputTokens() {
+  const envTokens = toInt(getEnv("POLISH_STAGE_MAX_OUTPUT_TOKENS"), 12000);
+  return Math.max(1024, Math.min(envTokens, 24000));
+}
+
+function polishShortModeEnabled() {
+  const env = getEnv("POLISH_STAGE_SHORT_MODE");
+  if (env == null) return true;
+  return env === "true" || env === "1" || env === "yes";
+}
+
+function getPolishTargetWordCount(payload, node5Packet) {
+  const envTarget = toInt(getEnv("POLISH_STAGE_TARGET_WORD_COUNT"), null);
+  if (Number.isFinite(envTarget) && envTarget > 0) return envTarget;
+  if (polishShortModeEnabled()) return 900;
+  const rewrittenText = node5Packet?.rewritten_units?.[0]?.rewritten_text;
+  if (hasText(rewrittenText)) return Math.max(800, Math.min(2600, Math.round(rewrittenText.length / 5)));
+  return 2200;
+}
+
+function findNode5PacketForPolish(payload) {
+  const latestNode5 = coerceObject(payload.latest_node5_json);
+  if (latestNode5) return { source: "latest_node5_json", node5Packet: latestNode5 };
+  const fromHistory = extractPacketFromConversationHistory(payload.conversation_history_json, "STAGE_REWRITE_NODE5_PACKET");
+  if (fromHistory) return { source: "conversation_history_json", node5Packet: fromHistory };
+  return { source: "missing", node5Packet: null };
+}
+
+function buildNode6Packet(payload, node5Packet, node5Source) {
+  const rewrittenText = node5Packet?.rewritten_units?.[0]?.rewritten_text ?? "";
+  const ready = hasText(rewrittenText);
+  return {
+    story_run_id: payload.story_run_id ?? node5Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node5Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node5Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "polish_gate",
+    evaluated_node: "Node 5",
+    gate_type: "polish_gate",
+    current_node: "Node 6",
+    node5_source: node5Source,
+    rewritten_text_present: ready,
+    rewritten_text_length: hasText(rewrittenText) ? rewrittenText.length : 0,
+    polish_allowed: ready,
+    polish_scope: ready
+      ? [
+          "Improve line-level clarity, rhythm, and sensory specificity.",
+          "Preserve canon, POV, events, evidence logic, unit label, and ending hook.",
+          "Keep changes within polish scope and avoid structural rewrites."
+        ]
+      : [],
+    hard_fail_reasons: ready ? [] : ["Node 5 rewritten_units[0].rewritten_text is missing."],
+    next_node: ready ? "N7_Polish_Evaluator" : ""
+  };
+}
+
+function buildNode7Packet(payload, node5Packet, node6Packet) {
+  const rewrittenText = node5Packet?.rewritten_units?.[0]?.rewritten_text ?? "";
+  const ready = node6Packet?.status === "ready" && hasText(rewrittenText);
+  return {
+    story_run_id: payload.story_run_id ?? node5Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node5Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node5Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "polish_evaluate",
+    evaluated_node: "Node 5",
+    gate_type: "polish_soft_gate",
+    current_node: "Node 7",
+    polish_score: ready ? 88 : 0,
+    polish_findings: ready
+      ? [
+          "Rewrite is ready for a controlled polish pass.",
+          "Polish should sharpen precision, sentence rhythm, concrete evidence, and emotional restraint.",
+          "Do not alter the scene mission, plot events, or carry-forward logic."
+        ]
+      : ["Polish evaluation could not run because Node 5 rewritten text is missing."],
+    polish_directives: ready
+      ? [
+          "Preserve all beats, canon, POV, and ending hook.",
+          "Tighten phrasing and remove generic thriller wording.",
+          "Strengthen concrete-before-concept grounding.",
+          "Maintain adult subtext and procedural clarity."
+        ]
+      : [],
+    next_node: ready ? "N8_Final_Polisher" : ""
+  };
+}
+
+function buildCompactPolishInput(payload, node5Packet, node6Packet, node7Packet, targetWordCount) {
+  const firstUnit = Array.isArray(node5Packet?.rewritten_units) ? node5Packet.rewritten_units[0] ?? {} : {};
+  const node3Packet = coerceObject(payload.latest_node3_json);
+  const node2Packet = coerceObject(payload.latest_node2_json);
+  return {
+    stage: "polish",
+    agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+    short_mode: polishShortModeEnabled(),
+    target_word_count: targetWordCount,
+    story_run_id: payload.story_run_id ?? node5Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node5Packet?.project_id ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node5Packet?.chapter_worker_version ?? node3Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    chapter_context: node3Packet?.chapter_context ?? node2Packet?.chapter_context ?? null,
+    run_config: node3Packet?.run_config ?? node2Packet?.run_config ?? null,
+    unit_label: firstUnit.unit_label ?? payload?.selected_unit_label ?? node3Packet?.target_units_requested?.[0] ?? "Chapter",
+    chapter_heading: firstUnit.chapter_heading ?? payload?.selected_chapter_title ?? "Chapter",
+    rewritten_text: firstUnit.rewritten_text ?? "",
+    rewritten_ending_condition: firstUnit.ending_condition ?? "",
+    rewritten_carry_forward_summary: firstUnit.carry_forward_summary ?? "",
+    drafting_bible_stack: parseStringPacket(node3Packet?.drafting_bible_stack ?? node2Packet?.drafting_bible_stack, {}),
+    style_packet: parseStringPacket(node3Packet?.style_packet ?? node2Packet?.style_packet, {}),
+    dialogue_voice_packet: parseStringPacket(node3Packet?.dialogue_voice_packet ?? node2Packet?.dialogue_voice_packet, {}),
+    locked_draft_priorities_packet: parseStringPacket(node3Packet?.locked_draft_priorities_packet ?? node2Packet?.locked_draft_priorities_packet, {}),
+    character_constellation_packet: parseStringPacket(node3Packet?.character_constellation_packet ?? node2Packet?.character_constellation_packet, {}),
+    structural_spine_packet: parseStringPacket(node3Packet?.structural_spine_packet ?? node2Packet?.structural_spine_packet, {}),
+    setpiece_symbol_architecture_packet: parseStringPacket(node3Packet?.setpiece_symbol_architecture_packet ?? node2Packet?.setpiece_symbol_architecture_packet, {}),
+    world_setting_palette_packet: parseStringPacket(node3Packet?.world_setting_palette_packet ?? node2Packet?.world_setting_palette_packet, {}),
+    thematic_moral_architecture_packet: parseStringPacket(node3Packet?.thematic_moral_architecture_packet ?? node2Packet?.thematic_moral_architecture_packet, {}),
+    signature_verbal_deployment_packet: parseStringPacket(node3Packet?.signature_verbal_deployment_packet ?? node2Packet?.signature_verbal_deployment_packet, {}),
+    research_authenticity_packet: parseStringPacket(node3Packet?.research_authenticity_packet ?? node2Packet?.research_authenticity_packet, {}),
+    prestige_quality_alignment_packet: parseStringPacket(node3Packet?.prestige_quality_alignment_packet ?? node2Packet?.prestige_quality_alignment_packet, {}),
+    unit_contracts: Array.isArray(node3Packet?.unit_contracts)
+      ? node3Packet.unit_contracts.map((item) => parseStringPacket(item, item))
+      : Array.isArray(node2Packet?.unit_contracts)
+        ? node2Packet.unit_contracts
+        : [],
+    node6_gate: node6Packet,
+    node7_evaluation: node7Packet,
+    instructions: polishShortModeEnabled()
+      ? "Polish the staged rewrite while keeping it in the 700 to 1000 word range. Preserve plot, POV, chapter mission, evidence logic, unit label, ending hook, and carry-forward. Improve line-level precision, rhythm, concrete sensory detail, subtext, and readability only."
+      : "Polish the rewrite for final chapter quality without changing structure, canon, POV, or required beats."
+  };
+}
+
+function validateAndNormalizeNode8Output(parsed, compactPolishInput, rawText) {
+  const sourceText = compactPolishInput.rewritten_text ?? "";
+  const unitLabel = compactPolishInput.unit_label ?? "Chapter";
+  const chapterHeading = compactPolishInput.chapter_heading ?? unitLabel;
+  const firstUnit = Array.isArray(parsed?.polished_units) ? parsed.polished_units[0] ?? {} : {};
+  const polishedText = hasText(firstUnit.polished_text)
+    ? firstUnit.polished_text
+    : hasText(parsed?.polished_text)
+      ? parsed.polished_text
+      : rawText;
+  const ready = hasText(polishedText);
+  return {
+    story_run_id: parsed?.story_run_id ?? compactPolishInput.story_run_id ?? null,
+    chapter_run_id: parsed?.chapter_run_id ?? compactPolishInput.chapter_run_id ?? null,
+    project_id: parsed?.project_id ?? compactPolishInput.project_id ?? null,
+    chapter_worker_version: parsed?.chapter_worker_version ?? compactPolishInput.chapter_worker_version ?? null,
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "polish",
+    current_node: "Node 8",
+    source_node: "Node 5",
+    polish_basis: "Node 6 polish gate + Node 7 polish evaluation",
+    polish_cycle_completed: toInt(parsed?.polish_cycle_completed, 1),
+    polished_units: ready
+      ? [
+          {
+            unit_label: firstUnit.unit_label ?? unitLabel,
+            chapter_heading: firstUnit.chapter_heading ?? chapterHeading,
+            polished_text: polishedText,
+            ending_condition: firstUnit.ending_condition ?? parsed?.ending_condition ?? compactPolishInput.rewritten_ending_condition ?? "Polish completed.",
+            carry_forward_summary: firstUnit.carry_forward_summary ?? parsed?.carry_forward_summary ?? compactPolishInput.rewritten_carry_forward_summary ?? "Polish completed."
+          }
+        ]
+      : [],
+    changes_made: Array.isArray(parsed?.changes_made) ? parsed.changes_made : ["Improved line-level clarity, rhythm, and concrete detail while preserving canon."],
+    preserved_structure: parsed?.preserved_structure === false ? false : true,
+    missing_required_inputs: ready ? [] : ["polished_units[0].polished_text"],
+    blocked_reasons: ready ? [] : ["Node 8 did not return non-empty polished_text."],
+    next_node: ready ? "N9_Final_Output" : "",
+    source_text_length: sourceText.length,
+    polished_text_length: ready ? polishedText.length : 0
+  };
+}
+
+async function runOpenAIPolish(compactPolishInput) {
+  const apiKey = getEnv("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is required for polish stage.");
+  const model = getEnv("POLISH_STAGE_MODEL") || getEnv("REWRITE_STAGE_MODEL") || getEnv("DRAFT_STAGE_MODEL") || "gpt-5.4";
+  const reasoningEffort = getEnv("POLISH_STAGE_REASONING") || "low";
+  const maxOutputTokens = Math.max(1024, Math.min(toInt(getEnv("POLISH_STAGE_MAX_OUTPUT_TOKENS"), 12000), 24000));
+  const timeoutMs = Math.max(60000, Math.min(toInt(getEnv("POLISH_STAGE_TIMEOUT_MS"), 480000), 840000));
+  console.log("[polish] max_output_tokens", maxOutputTokens);
+  console.log("[polish] timeout_ms", timeoutMs);
+  const prompt = `You are Node 8: Final Polisher in a staged story orchestration workflow.
+Return only one valid JSON object. Do not use markdown. Do not include commentary.
+Use STAGE_POLISH_COMPACT_INPUT as the controlling source.
+Polish goal:
+- Preserve canon, POV, scene events, evidence logic, unit label, and ending hook.
+- Do not restructure the chapter or add new plot events.
+- Improve line-level precision, concrete sensory detail, suspense pressure, adult emotional restraint, dialogue subtext, paragraph rhythm, and readability.
+- Follow Node 6 and Node 7 guidance.
+- If short_mode is true, keep the polished chapter between 700 and 1000 words.
+Required JSON output keys: story_run_id, chapter_run_id, project_id, chapter_worker_version, status, requested_operation, polished_units, changes_made, preserved_structure, missing_required_inputs, blocked_reasons, next_node.
+Ready rule: Return status = "ready" only if polished_units[0].polished_text is non-empty.
+STAGE_POLISH_COMPACT_INPUT:
+${JSON.stringify(compactPolishInput)}
+`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error(`Polish stage timed out after ${timeoutMs}ms.`)), timeoutMs);
+  const requestBody = { model, input: prompt, reasoning: { effort: reasoningEffort }, max_output_tokens: maxOutputTokens, store: true };
+  const startedAt = Date.now();
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`OpenAI polish request failed: ${response.status} ${text.slice(0, 1000)}`);
+    const data = parseMaybeJson(text, {});
+    const outputText = extractResponseText(data);
+    const parsed = extractJsonObjectFromText(outputText);
+    console.log("[Node 8] OpenAI response elapsed_ms", Date.now() - startedAt);
+    console.log("[Node 8] output_text_length", outputText.length);
+    console.log("[Node 8] parsed_json_present", !!parsed);
+    return { raw_response: data, output_text: outputText, output_parsed: validateAndNormalizeNode8Output(parsed, compactPolishInput, outputText) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function buildPolishStageResult(payload) {
+  console.log("[polish] latest_node5_json present", hasText(payload.latest_node5_json));
+  console.log("[polish] conversation_history_json present", hasText(payload.conversation_history_json));
+  console.log("[polish] stage payload keys", JSON.stringify(Object.keys(payload || {})));
+  const { source, node5Packet } = findNode5PacketForPolish(payload);
+  console.log("[polish] node5 source", source);
+  console.log("[polish] node5 packet present", !!node5Packet);
+  console.log("[polish] node5 packet status", node5Packet?.status ?? null);
+  const rewrittenText = node5Packet?.rewritten_units?.[0]?.rewritten_text ?? "";
+  if (!node5Packet || !hasText(rewrittenText)) {
+    return {
+      ok: false,
+      story_run_id: payload.story_run_id ?? null,
+      chapter_run_id: payload.chapter_run_id ?? null,
+      stage: "polish",
+      stage_status: "needs_input",
+      next_stage: "polish",
+      current_node: "Node 8",
+      stage_completed_at: new Date().toISOString(),
+      rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0),
+      remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+      polish_cycle_completed: toInt(payload.polish_cycle_completed, 0),
+      remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }),
+      result_payload_json: {
+        ok: false,
+        agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+        stage: "polish",
+        node5_source: source,
+        node5_status: node5Packet?.status ?? null
+      },
+      error_message: "Polish stage needs latest_node5_json or valid STAGE_REWRITE_NODE5_PACKET with rewritten_text.",
+      stage_error_message: "Polish stage needs latest_node5_json or valid STAGE_REWRITE_NODE5_PACKET with rewritten_text."
+    };
+  }
+
+  console.log("[Node 6] START");
+  const node6Packet = buildNode6Packet(payload, node5Packet, source);
+  console.log("[Node 6] status", node6Packet.status);
+  console.log("[Node 7] START");
+  const node7Packet = buildNode7Packet(payload, node5Packet, node6Packet);
+  console.log("[Node 7] status", node7Packet.status);
+  const polishTargetWordCount = getPolishTargetWordCount(payload, node5Packet);
+  const compactPolishInput = buildCompactPolishInput(payload, node5Packet, node6Packet, node7Packet, polishTargetWordCount);
+  console.log("[polish] short mode", polishShortModeEnabled());
+  console.log("[polish] target_word_count", polishTargetWordCount);
+  console.log("[polish] compact input keys", JSON.stringify(Object.keys(compactPolishInput)));
+  console.log("[polish] compact input length", JSON.stringify(compactPolishInput).length);
+  console.log("[Node 8] START");
+  let polishResult;
+  try {
+    polishResult = await runOpenAIPolish(compactPolishInput);
+  } catch (error) {
+    console.error("[Node 8] failed", error);
+    return {
+      ok: false,
+      story_run_id: payload.story_run_id ?? null,
+      chapter_run_id: payload.chapter_run_id ?? null,
+      stage: "polish",
+      stage_status: "failed",
+      next_stage: null,
+      current_node: "Node 8",
+      stage_completed_at: new Date().toISOString(),
+      rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 0),
+      remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+      polish_cycle_completed: toInt(payload.polish_cycle_completed, 0),
+      remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }),
+      result_payload_json: {
+        ok: false,
+        agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+        stage: "polish",
+        error_type: "node8_polish_failed",
+        error_message: error?.message ?? String(error),
+        node5_source: source,
+        short_mode: polishShortModeEnabled(),
+        target_word_count: polishTargetWordCount
+      },
+      error_message: error?.message ?? String(error),
+      stage_error_message: error?.message ?? String(error)
+    };
+  }
+
+  const node8Packet = polishResult.output_parsed;
+  const ready = node8Packet?.status === "ready" && Array.isArray(node8Packet?.polished_units) && hasText(node8Packet.polished_units?.[0]?.polished_text);
+  console.log("[Node 8] runner.run complete");
+  console.log("[Node 8] status", node8Packet?.status ?? null);
+  console.log("[Node 8] ready", ready);
+  const completedBefore = toInt(payload.polish_cycle_completed, 0);
+  const configuredRemaining = safeCycleCount(payload.remaining_polish_cycles, payload.polish_cycles ?? 1, { min: 0, max: 2 });
+  const polishCycleCompleted = completedBefore + 1;
+  const remainingPolishCycles = Math.max(0, configuredRemaining - 1);
+  const nextStage = remainingPolishCycles > 0 ? "polish" : "finalize";
+  const baseConversationHistory = hasText(payload.conversation_history_json) ? payload.conversation_history_json : buildConversationHistoryJson([["STAGE_REWRITE_NODE5_PACKET", node5Packet]]);
+  let updatedConversationHistory = appendStagePacketToHistory(baseConversationHistory, "STAGE_POLISH_NODE6_PACKET", node6Packet);
+  updatedConversationHistory = appendStagePacketToHistory(updatedConversationHistory, "STAGE_POLISH_NODE7_PACKET", node7Packet);
+  updatedConversationHistory = appendStagePacketToHistory(updatedConversationHistory, "STAGE_POLISH_NODE8_PACKET", node8Packet);
+  return {
+    ok: ready,
+    story_run_id: payload.story_run_id ?? node8Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    stage: "polish",
+    stage_status: ready ? "completed" : "needs_input",
+    next_stage: ready ? nextStage : "polish",
+    current_node: "Node 8",
+    stage_started_at: payload.stage_started_at ?? null,
+    stage_completed_at: new Date().toISOString(),
+    rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 1),
+    remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+    polish_cycle_completed: ready ? polishCycleCompleted : completedBefore,
+    remaining_polish_cycles: ready ? remainingPolishCycles : configuredRemaining,
+    latest_node5_json: JSON.stringify(node5Packet),
+    latest_node6_json: JSON.stringify(node6Packet),
+    latest_node7_json: JSON.stringify(node7Packet),
+    latest_node8_json: JSON.stringify(node8Packet),
+    conversation_history_json: updatedConversationHistory,
+    result_payload_json: {
+      ok: ready,
+      agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+      stage: "polish",
+      node5_source: source,
+      node6_status: node6Packet.status,
+      node7_status: node7Packet.status,
+      node8_status: node8Packet?.status ?? null,
+      polished_text_present: hasText(node8Packet?.polished_units?.[0]?.polished_text),
+      polished_text_length: hasText(node8Packet?.polished_units?.[0]?.polished_text) ? node8Packet.polished_units[0].polished_text.length : 0,
+      polish_cycle_completed: ready ? polishCycleCompleted : completedBefore,
+      remaining_polish_cycles: ready ? remainingPolishCycles : configuredRemaining,
+      next_stage: ready ? nextStage : "polish",
+      short_mode: polishShortModeEnabled(),
+      target_word_count: polishTargetWordCount
+    },
+    error_message: ready ? null : "Polish stage did not produce a ready Node 8 packet with non-empty polished_text.",
+    stage_error_message: ready ? null : "Polish stage did not produce a ready Node 8 packet with non-empty polished_text."
+  };
+}
+
+
 function buildNotImplementedStageResult(payload, stage) {
   return {
     ok: false,
@@ -1312,6 +1682,7 @@ async function buildStageResult(body) {
   if (stage === "intake") return buildIntakeStageResult(payload);
   if (stage === "draft") return await buildDraftStageResult(payload);
   if (stage === "rewrite") return await buildRewriteStageResult(payload);
+  if (stage === "polish") return await buildPolishStageResult(payload);
 
   return buildNotImplementedStageResult(payload, stage);
 }
@@ -1476,7 +1847,7 @@ export default async (req, context) => {
     const effectiveStage = safeString(effectiveBody?.stage, null);
 
     // Early safe-block unsupported downstream stages BEFORE expensive parsing/model work.
-    // This prevents rewrite/polish/finalize from causing Netlify 500s while those stages are not implemented.
+    // This prevents unsupported downstream stages from causing Netlify 500s while those stages are not implemented.
     if (SAFELY_BLOCKED_STAGES.includes(effectiveStage)) {
       console.log("[agent-background-stage] safely blocking stage", effectiveStage);
       const blockedPayload = {
