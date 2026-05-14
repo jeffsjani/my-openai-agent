@@ -1,7 +1,7 @@
 // netlify/functions/agent-stage-background.mjs
 //
 // Story Orchestrator staged background worker
-// Version: agent-stage-background-v2026-05-13-14-polish-stage-v1
+// Version: agent-stage-background-v2026-05-13-15-finalize-stage-v1
 //
 // Supports:
 // - intake: deterministic Node 1 + Node 2 packet build, no OpenAI call.
@@ -16,7 +16,7 @@
 // Public endpoint: /.netlify/functions/agent-stage-background
 
 const AGENT_BACKGROUND_STAGE_VERSION =
-  "agent-stage-background-v2026-05-13-14-polish-stage-v1";
+  "agent-stage-background-v2026-05-13-15-finalize-stage-v1";
 
 const ACTIVE_PACKET_KEYS = [
   "style_packet",
@@ -33,7 +33,7 @@ const ACTIVE_PACKET_KEYS = [
 ];
 
 const ALLOWED_STAGES = ["intake", "draft", "rewrite", "polish", "finalize"];
-const SAFELY_BLOCKED_STAGES = ["finalize"];
+const SAFELY_BLOCKED_STAGES = [];
 
 function getEnv(name) {
   return globalThis?.Netlify?.env?.get?.(name) ?? process?.env?.[name] ?? null;
@@ -1626,6 +1626,245 @@ async function buildPolishStageResult(payload) {
 }
 
 
+
+function findNode8PacketForFinalize(payload) {
+  const latestNode8 = coerceObject(payload.latest_node8_json);
+  if (latestNode8) return { source: "latest_node8_json", node8Packet: latestNode8 };
+  const fromHistory = extractPacketFromConversationHistory(payload.conversation_history_json, "STAGE_POLISH_NODE8_PACKET");
+  if (fromHistory) return { source: "conversation_history_json", node8Packet: fromHistory };
+  return { source: "missing", node8Packet: null };
+}
+
+function extractFinalTextFromNode8(node8Packet) {
+  if (!node8Packet || typeof node8Packet !== "object") return "";
+  const firstPolished = Array.isArray(node8Packet.polished_units)
+    ? node8Packet.polished_units[0] ?? {}
+    : {};
+  return firstPolished.polished_text ?? node8Packet.polished_text ?? "";
+}
+
+function getFinalUnitLabel(payload, node8Packet) {
+  const firstPolished = Array.isArray(node8Packet?.polished_units)
+    ? node8Packet.polished_units[0] ?? {}
+    : {};
+  return firstNonEmpty(
+    firstPolished.unit_label,
+    node8Packet?.unit_label,
+    payload?.selected_unit_label,
+    payload?.current_unit_label,
+    payload?.chapter_context?.unit_label,
+    "Chapter"
+  ) ?? "Chapter";
+}
+
+function getFinalChapterHeading(payload, node8Packet, unitLabel) {
+  const firstPolished = Array.isArray(node8Packet?.polished_units)
+    ? node8Packet.polished_units[0] ?? {}
+    : {};
+  const heading = firstNonEmpty(
+    firstPolished.chapter_heading,
+    node8Packet?.chapter_heading,
+    payload?.selected_chapter_title,
+    payload?.current_chapter_title
+  );
+  if (heading) return String(heading);
+  return String(unitLabel || "Chapter").replace(" - ", "\n");
+}
+
+function buildChapterSummary(finalText, payload, node8Packet) {
+  const firstPolished = Array.isArray(node8Packet?.polished_units)
+    ? node8Packet.polished_units[0] ?? {}
+    : {};
+  const unitLabel = getFinalUnitLabel(payload, node8Packet);
+  const existingCarry = firstPolished.carry_forward_summary ?? node8Packet?.carry_forward_summary ?? null;
+  if (hasText(existingCarry)) {
+    return `Finalized ${unitLabel}. ${String(existingCarry).trim()}`;
+  }
+  const clean = String(finalText || "").replace(/\s+/g, " ").trim();
+  const excerpt = clean.length > 280 ? clean.slice(0, 280).replace(/\s+\S*$/, "") + "..." : clean;
+  return excerpt ? `Finalized ${unitLabel}: ${excerpt}` : `Finalized ${unitLabel}.`;
+}
+
+function buildNode9Packet(payload, node8Packet, node8Source) {
+  const finalText = extractFinalTextFromNode8(node8Packet);
+  const ready = hasText(finalText);
+  const firstPolished = Array.isArray(node8Packet?.polished_units)
+    ? node8Packet.polished_units[0] ?? {}
+    : {};
+  const unitLabel = getFinalUnitLabel(payload, node8Packet);
+  const chapterHeading = getFinalChapterHeading(payload, node8Packet, unitLabel);
+  const endingCondition = firstPolished.ending_condition ?? node8Packet?.ending_condition ?? "Final polished chapter completed.";
+  const carryForwardSummary = firstPolished.carry_forward_summary ?? node8Packet?.carry_forward_summary ?? "Final polished chapter completed.";
+  const chapterSummary = buildChapterSummary(finalText, payload, node8Packet);
+
+  return {
+    story_run_id: payload.story_run_id ?? node8Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node8Packet?.project_id ?? null,
+    title: payload.title ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node8Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "finalize",
+    current_node: "Node 9",
+    source_node: "Node 8",
+    node8_source: node8Source,
+    unit_label: unitLabel,
+    chapter_heading: chapterHeading,
+    final_chapter_text: finalText,
+    final_combined_book_text: finalText,
+    final_combined_book_json: {
+      story_run_id: payload.story_run_id ?? null,
+      chapter_run_id: payload.chapter_run_id ?? null,
+      title: payload.title ?? null,
+      chapters: ready
+        ? [
+            {
+              chapter_number: payload.selected_chapter_number ?? payload.current_chapter_number ?? payload.chapter_context?.chapter_number ?? null,
+              chapter_title: payload.selected_chapter_title ?? payload.current_chapter_title ?? payload.chapter_context?.chapter_title ?? null,
+              unit_label: unitLabel,
+              chapter_heading: chapterHeading,
+              final_chapter_text: finalText,
+              chapter_summary: chapterSummary,
+              carry_forward_summary: carryForwardSummary,
+              ending_condition: endingCondition
+            }
+          ]
+        : []
+    },
+    chapter_summary: chapterSummary,
+    carry_forward_summary: carryForwardSummary,
+    ending_condition: endingCondition,
+    final_text_present: ready,
+    final_text_length: ready ? finalText.length : 0,
+    missing_required_inputs: ready ? [] : ["latest_node8_json.polished_units[0].polished_text"],
+    blocked_reasons: ready ? [] : ["Finalize stage needs a ready Node 8 packet with non-empty polished_text."],
+    next_node: ready ? "N10_Final_Handoff" : ""
+  };
+}
+
+function buildNode10Packet(payload, node9Packet) {
+  const ready = node9Packet?.status === "ready" && hasText(node9Packet?.final_chapter_text);
+  return {
+    story_run_id: payload.story_run_id ?? node9Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? node9Packet?.chapter_run_id ?? null,
+    project_id: payload.project_id ?? node9Packet?.project_id ?? null,
+    title: payload.title ?? node9Packet?.title ?? null,
+    chapter_worker_version: payload.chapter_worker_version ?? node9Packet?.chapter_worker_version ?? "chapter-worker-v2-manifest-override",
+    status: ready ? "ready" : "needs_input",
+    requested_operation: "finalize_handoff",
+    current_node: "Node 10",
+    source_node: "Node 9",
+    final_chapter_text: node9Packet?.final_chapter_text ?? "",
+    final_combined_book_text: node9Packet?.final_combined_book_text ?? node9Packet?.final_chapter_text ?? "",
+    final_combined_book_json: node9Packet?.final_combined_book_json ?? null,
+    chapter_summary: node9Packet?.chapter_summary ?? null,
+    carry_forward_summary: node9Packet?.carry_forward_summary ?? null,
+    ending_condition: node9Packet?.ending_condition ?? null,
+    unit_label: node9Packet?.unit_label ?? payload?.selected_unit_label ?? null,
+    chapter_heading: node9Packet?.chapter_heading ?? payload?.selected_chapter_title ?? null,
+    result_payload: {
+      ok: ready,
+      story_run_id: payload.story_run_id ?? null,
+      chapter_run_id: payload.chapter_run_id ?? null,
+      status: ready ? "completed" : "needs_input",
+      stage: "finalize",
+      final_chapter_text: node9Packet?.final_chapter_text ?? "",
+      final_combined_book_text: node9Packet?.final_combined_book_text ?? node9Packet?.final_chapter_text ?? "",
+      final_combined_book_json: node9Packet?.final_combined_book_json ?? null,
+      chapter_summary: node9Packet?.chapter_summary ?? null,
+      carry_forward_summary: node9Packet?.carry_forward_summary ?? null,
+      ending_condition: node9Packet?.ending_condition ?? null,
+      unit_label: node9Packet?.unit_label ?? payload?.selected_unit_label ?? null,
+      chapter_heading: node9Packet?.chapter_heading ?? payload?.selected_chapter_title ?? null
+    },
+    missing_required_inputs: ready ? [] : ["node9.final_chapter_text"],
+    blocked_reasons: ready ? [] : ["Node 10 handoff requires Node 9 final_chapter_text."],
+    next_node: ready ? "complete" : ""
+  };
+}
+
+async function buildFinalizeStageResult(payload) {
+  console.log("[finalize] latest_node8_json present", hasText(payload.latest_node8_json));
+  console.log("[finalize] conversation_history_json present", hasText(payload.conversation_history_json));
+  console.log("[finalize] stage payload keys", JSON.stringify(Object.keys(payload || {})));
+
+  const { source, node8Packet } = findNode8PacketForFinalize(payload);
+  console.log("[finalize] node8 source", source);
+  console.log("[finalize] node8 packet present", !!node8Packet);
+  console.log("[finalize] node8 packet status", node8Packet?.status ?? null);
+
+  const polishedText = extractFinalTextFromNode8(node8Packet);
+  if (!node8Packet || !hasText(polishedText)) {
+    return {
+      ok: false,
+      story_run_id: payload.story_run_id ?? null,
+      chapter_run_id: payload.chapter_run_id ?? null,
+      stage: "finalize",
+      stage_status: "needs_input",
+      next_stage: "finalize",
+      current_node: "Node 10",
+      stage_completed_at: new Date().toISOString(),
+      rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 1),
+      remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+      polish_cycle_completed: toInt(payload.polish_cycle_completed, 1),
+      remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }),
+      result_payload_json: {
+        ok: false,
+        agent_background_stage_version: AGENT_BACKGROUND_STAGE_VERSION,
+        stage: "finalize",
+        node8_source: source,
+        node8_status: node8Packet?.status ?? null,
+        error_type: "missing_node8_polished_text"
+      },
+      error_message: "Finalize stage needs latest_node8_json or valid STAGE_POLISH_NODE8_PACKET with polished_text.",
+      stage_error_message: "Finalize stage needs latest_node8_json or valid STAGE_POLISH_NODE8_PACKET with polished_text."
+    };
+  }
+
+  console.log("[Node 9] START");
+  const node9Packet = buildNode9Packet(payload, node8Packet, source);
+  console.log("[Node 9] status", node9Packet.status);
+  console.log("[Node 10] START");
+  const node10Packet = buildNode10Packet(payload, node9Packet);
+  console.log("[Node 10] status", node10Packet.status);
+
+  const ready = node9Packet.status === "ready" && node10Packet.status === "ready";
+  const baseConversationHistory = hasText(payload.conversation_history_json)
+    ? payload.conversation_history_json
+    : buildConversationHistoryJson([["STAGE_POLISH_NODE8_PACKET", node8Packet]]);
+  let updatedConversationHistory = appendStagePacketToHistory(baseConversationHistory, "STAGE_FINALIZE_NODE9_PACKET", node9Packet);
+  updatedConversationHistory = appendStagePacketToHistory(updatedConversationHistory, "STAGE_FINALIZE_NODE10_PACKET", node10Packet);
+
+  return {
+    ok: ready,
+    story_run_id: payload.story_run_id ?? node10Packet?.story_run_id ?? null,
+    chapter_run_id: payload.chapter_run_id ?? node10Packet?.chapter_run_id ?? null,
+    stage: "finalize",
+    stage_status: ready ? "completed" : "needs_input",
+    next_stage: ready ? "complete" : "finalize",
+    current_node: "Node 10",
+    stage_started_at: payload.stage_started_at ?? null,
+    stage_completed_at: new Date().toISOString(),
+    rewrite_cycle_completed: toInt(payload.rewrite_cycle_completed, 1),
+    remaining_rewrite_cycles: safeCycleCount(payload.remaining_rewrite_cycles, 0, { min: 0, max: 4 }),
+    polish_cycle_completed: toInt(payload.polish_cycle_completed, 1),
+    remaining_polish_cycles: safeCycleCount(payload.remaining_polish_cycles, 0, { min: 0, max: 2 }),
+    latest_node8_json: JSON.stringify(node8Packet),
+    latest_node9_json: JSON.stringify(node9Packet),
+    latest_node10_json: JSON.stringify(node10Packet),
+    conversation_history_json: updatedConversationHistory,
+    final_chapter_text: node10Packet.final_chapter_text,
+    final_combined_book_text: node10Packet.final_combined_book_text,
+    final_combined_book_json: stringifyJson(node10Packet.final_combined_book_json),
+    chapter_summary: node10Packet.chapter_summary,
+    carry_forward_summary: node10Packet.carry_forward_summary,
+    ending_condition: node10Packet.ending_condition,
+    result_payload_json: node10Packet.result_payload,
+    error_message: ready ? null : "Finalize stage did not produce a ready Node 10 packet with final_chapter_text.",
+    stage_error_message: ready ? null : "Finalize stage did not produce a ready Node 10 packet with final_chapter_text."
+  };
+}
+
 function buildNotImplementedStageResult(payload, stage) {
   return {
     ok: false,
@@ -1683,6 +1922,7 @@ async function buildStageResult(body) {
   if (stage === "draft") return await buildDraftStageResult(payload);
   if (stage === "rewrite") return await buildRewriteStageResult(payload);
   if (stage === "polish") return await buildPolishStageResult(payload);
+  if (stage === "finalize") return await buildFinalizeStageResult(payload);
 
   return buildNotImplementedStageResult(payload, stage);
 }
