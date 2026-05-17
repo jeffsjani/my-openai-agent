@@ -131,7 +131,17 @@ function getBuildMode(body) {
 function buildPacketSchema() {
   const packetObjectSchema = {
     type: "object",
-    additionalProperties: true,
+    additionalProperties: false,
+    required: [
+      "source_section_number",
+      "source_section_name",
+      "packet_summary",
+      "shorthand",
+      "rules",
+      "do_not",
+      "continuity_constraints",
+      "drafting_guidance"
+    ],
     properties: {
       source_section_number: {
         type: ["number", "null"]
@@ -144,6 +154,30 @@ function buildPacketSchema() {
       },
       shorthand: {
         type: ["string", "null"]
+      },
+      rules: {
+        type: "array",
+        items: {
+          type: "string"
+        }
+      },
+      do_not: {
+        type: "array",
+        items: {
+          type: "string"
+        }
+      },
+      continuity_constraints: {
+        type: "array",
+        items: {
+          type: "string"
+        }
+      },
+      drafting_guidance: {
+        type: "array",
+        items: {
+          type: "string"
+        }
       }
     }
   };
@@ -195,6 +229,7 @@ Important:
 - Do not invent irrelevant facts.
 - Use concise but operational fields that downstream drafting can use.
 - Every packet must include source_section_number.
+- Each packet must use exactly these fields: source_section_number, source_section_name, packet_summary, shorthand, rules, do_not, continuity_constraints, and drafting_guidance. Put any detailed section-specific content into those arrays or strings. Do not add extra keys.
 `;
 }
 
