@@ -106,7 +106,9 @@ function normalizePacketSet(raw) {
     }
   }
 
-  const missing = PACKET_KEYS.filter((key) => !packetIsValid(draftingBibleStack[key]));
+  const missing = PACKET_KEYS.filter(
+    (key) => !packetIsValid(draftingBibleStack[key])
+  );
 
   return {
     active_stack_override: activeStackOverride,
@@ -196,6 +198,27 @@ Important:
 `;
 }
 
+function extractOutputText(data) {
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  const textParts = [];
+
+  if (Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (typeof part.text === "string") textParts.push(part.text);
+          if (typeof part.output_text === "string") textParts.push(part.output_text);
+        }
+      }
+    }
+  }
+
+  return textParts.join("\n").trim();
+}
+
 async function callOpenAIForPackets({ body, usePdfUrl }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -256,7 +279,7 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(requestBody)
@@ -281,23 +304,7 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
     };
   }
 
-  let outputText = data.output_text;
-
-  if (!outputText && Array.isArray(data.output)) {
-    const textParts = [];
-
-    for (const item of data.output) {
-      if (Array.isArray(item.content)) {
-        for (const part of item.content) {
-          if (typeof part.text === "string") {
-            textParts.push(part.text);
-          }
-        }
-      }
-    }
-
-    outputText = textParts.join("\n").trim();
-  }
+  const outputText = extractOutputText(data);
 
   let parsed;
   try {
@@ -346,6 +353,7 @@ export async function handler(event) {
 
   const projectId = cleanString(body.project_id);
   const title = cleanString(body.title);
+  const buildMode = cleanString(body.build_mode, getBuildMode(body));
 
   if (!projectId) {
     return json(400, {
@@ -354,15 +362,13 @@ export async function handler(event) {
     });
   }
 
-  const buildMode = cleanString(body.build_mode, getBuildMode(body));
-
   try {
     if (buildMode === "packet_override") {
       const normalized = normalizePacketSet({
         active_stack_override: body.active_stack_override,
         drafting_bible_stack: body.drafting_bible_stack,
-        ...body.active_stack_override,
-        ...body.drafting_bible_stack
+        ...parseJsonMaybe(body.active_stack_override, {}),
+        ...parseJsonMaybe(body.drafting_bible_stack, {})
       });
 
       return json(200, {
@@ -379,8 +385,9 @@ export async function handler(event) {
         ok: false,
         project_id: projectId,
         title,
-        build_mode,
-        error: "No master_story_bible_text, master_story_bible_pdf_url, or packet override was provided."
+        build_mode: buildMode,
+        error:
+          "No master_story_bible_text, master_story_bible_pdf_url, or packet override was provided."
       });
     }
 
@@ -395,10 +402,12 @@ export async function handler(event) {
           ok: false,
           project_id: projectId,
           title,
-          build_mode,
+          build_mode: buildMode,
           error: result.error,
           debug_openai_status: result.status,
-          debug_openai_elapsed_ms: result.elapsed_ms
+          debug_openai_elapsed_ms: result.elapsed_ms,
+          debug_output_text_preview: result.output_text_preview ?? null,
+          debug_raw_response_preview: result.raw_response_preview ?? null
         });
       }
 
@@ -408,7 +417,7 @@ export async function handler(event) {
         ok: true,
         project_id: projectId,
         title,
-        build_mode,
+        build_mode: buildMode,
         model: result.model,
         elapsed_ms: result.elapsed_ms,
         ...normalized
@@ -423,7 +432,7 @@ export async function handler(event) {
           ok: false,
           project_id: projectId,
           title,
-          build_mode,
+          build_mode: buildMode,
           error: "master_story_bible_pdf_url is required for pdf_url mode."
         });
       }
@@ -438,10 +447,12 @@ export async function handler(event) {
           ok: false,
           project_id: projectId,
           title,
-          build_mode,
+          build_mode: buildMode,
           error: result.error,
           debug_openai_status: result.status,
-          debug_openai_elapsed_ms: result.elapsed_ms
+          debug_openai_elapsed_ms: result.elapsed_ms,
+          debug_output_text_preview: result.output_text_preview ?? null,
+          debug_raw_response_preview: result.raw_response_preview ?? null
         });
       }
 
@@ -451,7 +462,7 @@ export async function handler(event) {
         ok: true,
         project_id: projectId,
         title,
-        build_mode,
+        build_mode: buildMode,
         model: result.model,
         elapsed_ms: result.elapsed_ms,
         ...normalized
@@ -462,7 +473,7 @@ export async function handler(event) {
       ok: false,
       project_id: projectId,
       title,
-      build_mode,
+      build_mode: buildMode,
       error: `Unsupported build_mode: ${buildMode}`
     });
   } catch (error) {
@@ -470,7 +481,7 @@ export async function handler(event) {
       ok: false,
       project_id: projectId,
       title,
-      build_mode,
+      build_mode: buildMode,
       error: error?.message ?? String(error)
     });
   }
