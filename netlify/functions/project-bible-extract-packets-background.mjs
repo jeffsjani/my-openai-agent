@@ -224,6 +224,43 @@ function extractOutputText(data) {
   return textParts.join("\n").trim();
 }
 
+async function fetchPdfAsBase64(pdfUrl) {
+  const response = await fetch(pdfUrl, {
+    method: "GET",
+    headers: {
+      Accept: "application/pdf,*/*"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PDF URL: HTTP ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  if (!buffer.length) {
+    throw new Error("Fetched PDF was empty.");
+  }
+
+  const firstBytes = buffer.slice(0, 5).toString("utf8");
+  const appearsPdf = firstBytes === "%PDF-";
+
+  if (!appearsPdf) {
+    const preview = buffer.slice(0, 200).toString("utf8");
+    throw new Error(
+      `Fetched file does not appear to be a PDF. content-type=${contentType || "unknown"}; preview=${preview}`
+    );
+  }
+
+  return {
+    base64: buffer.toString("base64"),
+    content_type: contentType,
+    bytes: buffer.length
+  };
+}
+
 async function callOpenAIForPackets({ body, usePdfUrl }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -247,15 +284,24 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
     }
   ];
 
+  let pdfDebug = null;
+
   if (usePdfUrl) {
     const pdfUrl = cleanString(body.master_story_bible_pdf_url);
     if (!pdfUrl) {
       throw new Error("master_story_bible_pdf_url is required for pdf_url mode.");
     }
 
+    const pdf = await fetchPdfAsBase64(pdfUrl);
+    pdfDebug = {
+      bytes: pdf.bytes,
+      content_type: pdf.content_type
+    };
+
     content.push({
       type: "input_file",
-      file_url: pdfUrl
+      filename: "master_story_bible.pdf",
+      file_data: `data:application/pdf;base64,${pdf.base64}`
     });
   } else {
     const text = cleanString(body.master_story_bible_text);
@@ -314,7 +360,8 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
       status: response.status,
       elapsed_ms: Date.now() - startedAt,
       error: data.error?.message ?? rawText,
-      raw_response_preview: rawText.slice(0, 2000)
+      raw_response_preview: rawText.slice(0, 2000),
+      pdf_debug: pdfDebug
     };
   }
 
@@ -333,7 +380,8 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
       status: response.status,
       elapsed_ms: Date.now() - startedAt,
       error: "OpenAI response did not parse into JSON.",
-      output_text_preview: String(outputText ?? "").slice(0, 2000)
+      output_text_preview: String(outputText ?? "").slice(0, 2000),
+      pdf_debug: pdfDebug
     };
   }
 
@@ -342,7 +390,8 @@ async function callOpenAIForPackets({ body, usePdfUrl }) {
     status: response.status,
     elapsed_ms: Date.now() - startedAt,
     model,
-    parsed
+    parsed,
+    pdf_debug: pdfDebug
   };
 }
 
@@ -380,7 +429,10 @@ async function runExtractionAndCallback(body) {
   const packetBuildId = cleanString(body.packet_build_id);
   const projectId = cleanString(body.project_id);
   const title = cleanString(body.title);
-  const buildMode = cleanString(body.build_mode, body.master_story_bible_pdf_url ? "pdf_url" : "text_extraction");
+  const buildMode = cleanString(
+    body.build_mode,
+    body.master_story_bible_pdf_url ? "pdf_url" : "text_extraction"
+  );
 
   if (!packetBuildId) {
     throw new Error("packet_build_id is required.");
@@ -441,6 +493,7 @@ async function runExtractionAndCallback(body) {
         build_mode: buildMode,
         model: extractionResult?.model ?? null,
         elapsed_ms: extractionResult?.elapsed_ms ?? null,
+        pdf_debug: extractionResult?.pdf_debug ?? null,
         bible_packets_ready: normalized.bible_packets_ready,
         missing_bible_packets: normalized.missing_bible_packets
       }
@@ -459,7 +512,8 @@ async function runExtractionAndCallback(body) {
       error_message: error?.message ?? String(error),
       extraction_result_json: {
         error: error?.message ?? String(error),
-        build_mode: buildMode
+        build_mode: buildMode,
+        master_story_bible_pdf_url: body.master_story_bible_pdf_url ?? null
       }
     };
 
@@ -489,7 +543,10 @@ export async function handler(event) {
   const packetBuildId = cleanString(body.packet_build_id);
   const projectId = cleanString(body.project_id);
   const title = cleanString(body.title);
-  const buildMode = cleanString(body.build_mode, body.master_story_bible_pdf_url ? "pdf_url" : "text_extraction");
+  const buildMode = cleanString(
+    body.build_mode,
+    body.master_story_bible_pdf_url ? "pdf_url" : "text_extraction"
+  );
 
   if (!packetBuildId || !projectId) {
     return json(400, {
@@ -500,10 +557,6 @@ export async function handler(event) {
     });
   }
 
-  /*
-    In Netlify background functions, the platform returns the HTTP 202 for the async invocation.
-    The function continues running in the background and posts results to BuildShip callback.
-  */
   const callbackResult = await runExtractionAndCallback(body);
 
   return json(callbackResult.ok ? 200 : 500, {
